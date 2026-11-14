@@ -24,6 +24,8 @@ interface Ctx {
   /** File the Writer should open next (set by Drive / search). */
   writerTarget: DocRef | null;
   openInWriter: (ref: DocRef | null) => void;
+  sheetTarget: DocRef | null;
+  openInSheets: (ref: DocRef | null) => void;
   /** Document currently open in an app; sent to Atlas AI as context. */
   activeDoc: (DocRef & { app: string; title?: string }) | null;
   setActiveDoc: (d: (DocRef & { app: string; title?: string }) | null) => void;
@@ -51,6 +53,7 @@ export function AtlasProvider({ bridge, children }: { bridge: AtlasBridge; child
   const [aiOpen, setAiOpenState] = useState<boolean>(() => load("atlas.aiOpen", true));
   const [aiDraft, setAiDraft] = useState("");
   const [writerTarget, setWriterTarget] = useState<DocRef | null>(() => load("atlas.writerTarget", null));
+  const [sheetTarget, setSheetTarget] = useState<DocRef | null>(() => load("atlas.sheetTarget", null));
   const [activeDoc, setActiveDoc] = useState<Ctx["activeDoc"]>(null);
 
   useEffect(() => {
@@ -91,8 +94,10 @@ export function AtlasProvider({ bridge, children }: { bridge: AtlasBridge; child
     askAi: (p) => { setAiDraft(p); if (p) { setAiOpenState(true); save("atlas.aiOpen", true); } },
     writerTarget,
     openInWriter: (ref) => { setWriterTarget(ref); save("atlas.writerTarget", ref); if (ref) go("writer"); },
+    sheetTarget,
+    openInSheets: (ref) => { setSheetTarget(ref); save("atlas.sheetTarget", ref); if (ref) go("sheets"); },
     activeDoc, setActiveDoc,
-  }), [bridge, route, go, theme, grants, refreshGrants, toasts, notify, dismiss, markAllRead, aiOpen, aiDraft, writerTarget, activeDoc]);
+  }), [bridge, route, go, theme, grants, refreshGrants, toasts, notify, dismiss, markAllRead, aiOpen, aiDraft, writerTarget, sheetTarget, activeDoc]);
 
   return <AtlasCtx.Provider value={value}>{children}</AtlasCtx.Provider>;
 }

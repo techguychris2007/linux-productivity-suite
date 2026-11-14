@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { LuFolder, LuFile, LuFileText, LuChevronRight, LuFolderPlus, LuPlus, LuTrash2, LuRefreshCw, LuHardDrive, LuSparkles, LuX, LuFileInput } from "react-icons/lu";
+import { LuFolder, LuFile, LuFileText, LuChevronRight, LuFolderPlus, LuPlus, LuTrash2, LuRefreshCw, LuHardDrive, LuSparkles, LuX, LuFileInput, LuSheet } from "react-icons/lu";
 import type { FsEntry } from "@atlas/shared-types";
 import { Badge, Button, EmptyState, IconButton, Spinner } from "@atlas/ui";
 import { useAtlas } from "../context";
@@ -9,7 +9,7 @@ const fmtSize = (n: number) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024)
 const fmtDate = (ms: number | null) => ms ? new Date(ms).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
 export function Drive() {
-  const { bridge, grants, notify, go, askAi, openInWriter } = useAtlas();
+  const { bridge, grants, notify, go, askAi, openInWriter, openInSheets } = useAtlas();
   const [importing, setImporting] = useState(false);
   const [grantId, setGrantId] = useState<string | null>(null);
   const [path, setPath] = useState("");
@@ -33,6 +33,7 @@ export function Drive() {
   const open = async (e: FsEntry) => {
     if (e.kind === "dir") { setPath(e.path); return; }
     if (e.name.endsWith(".atlasdoc")) { openInWriter({ grant: grantId!, path: e.path }); return; }
+    if (e.name.endsWith(".atlasheet")) { openInSheets({ grant: grantId!, path: e.path }); return; }
     if (!TEXT_EXT.test(e.name)) { setPreview({ entry: e, content: "", truncated: false }); return; }
     try {
       const r = await bridge.core<{ content: string; truncated: boolean }>("fs.read_text", { grant: grantId, path: e.path, max_bytes: 200_000 });

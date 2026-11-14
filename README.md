@@ -6,7 +6,7 @@ Atlas does not include an AI model. You can connect it to Google Gemini, a local
 
 ## Ubuntu status
 
-The project now includes a native Tauri desktop build path. A working installer has not yet been produced or published. Build requirements and install commands are below.
+The project includes a native Tauri desktop build path. Local `.deb` and AppImage packages can be built; a signed public release is not available yet. Build requirements and install commands are below.
 
 ## Run from source on Ubuntu
 
@@ -92,6 +92,8 @@ apps/shell/src-tauri/target/release/bundle/appimage/*.AppImage
 ~~~
 
 The desktop app starts and stops its local core and engine services with the window. The AppImage still requires a compatible system WebKitGTK library and Python 3.12 or newer.
+
+Sheets currently supports Atlas spreadsheet files (`.atlasheet`), CSV import/export, autosave in a shared folder, cell references and basic formulas (`+`, `-`, `*`, `/`, parentheses, `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`). XLSX, charts and AI spreadsheet editing are still in progress.
 
 ## Development checks
 
