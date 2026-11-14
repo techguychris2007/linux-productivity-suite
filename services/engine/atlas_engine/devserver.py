@@ -39,7 +39,7 @@ from .writer.converter import LibreOffice
 
 
 class Engine:
-    def __init__(self, data_dir: Path, core: CoreClient | None) -> None:
+    def __init__(self, data_dir: Path, core: CoreClient | None, startup_secret: tuple[str, str] | None = None) -> None:
         self.settings = Settings(data_dir / "engine" / "settings.json")
         self.bus = EventBus()
         self.registry = ToolRegistry()
@@ -50,6 +50,7 @@ class Engine:
             drive.register(self.registry, core)
             writer_service.register(self.registry, self.writer)
         self._provider = None
+        self._external_secret_kind, self._external_secret = startup_secret or (None, None)
         self.orch = Orchestrator(self.registry, self.bus, self.provider, approvals=core)
 
     def provider(self):
@@ -57,21 +58,42 @@ class Engine:
         if not cfg:
             return None
         if self._provider is None:
+            cfg = dict(cfg)
+            if not cfg.get("api_key") and self._external_secret_kind == cfg.get("kind"):
+                if self._external_secret:
+                    cfg["api_key"] = self._external_secret
             self._provider = make_provider(cfg)
         return self._provider
 
+    def provider_public(self) -> dict | None:
+        current = self.settings.provider_public()
+        if current and current.get("kind") == self._external_secret_kind and self._external_secret:
+            return current | {"has_api_key": True}
+        return current
+
     def set_provider(self, cfg: dict) -> dict:
+        external_secret = bool(cfg.pop("_atlas_keyring", False))
         kind = cfg.get("kind")
         if kind not in {k["kind"] for k in PROVIDER_KINDS}:
             raise ProviderError("unknown provider")
         prev = self.settings.get("provider") or {}
         if not cfg.get("api_key") and prev.get("kind") == kind:
-            cfg["api_key"] = prev.get("api_key", "")  # keep the stored key when only the model changes
+            cfg["api_key"] = prev.get("api_key", "")  # keep a legacy key when migrating to keyring
         p = make_provider(cfg)  # validates (Gemini: lists models with the key)
         cfg["model"] = p.model
-        self.settings.set("provider", {k: v for k, v in cfg.items() if v not in (None, "")})
+        self.settings.set(
+            "provider",
+            {
+                k: v
+                for k, v in cfg.items()
+                if v not in (None, "") and not (external_secret and k == "api_key")
+            },
+        )
         self._provider = p
-        return self.settings.provider_public()
+        if external_secret:
+            self._external_secret_kind = kind if cfg.get("api_key") else None
+            self._external_secret = cfg.get("api_key")
+        return self.provider_public()
 
 
 def make_handler(engine: Engine, ui_token: str, origin: str | None):
@@ -125,9 +147,9 @@ def make_handler(engine: Engine, ui_token: str, origin: str | None):
             p = u.path
             if p == "/v1/health":
                 return self._send(200, {"result": {"version": __version__, "core": engine.core is not None, "libreoffice": engine.lo.available(),
-                                                   "provider": engine.settings.provider_public()}})
+                                                   "provider": engine.provider_public()}})
             if p == "/v1/providers":
-                return self._send(200, {"result": {"kinds": PROVIDER_KINDS, "current": engine.settings.provider_public()}})
+                return self._send(200, {"result": {"kinds": PROVIDER_KINDS, "current": engine.provider_public()}})
             if p == "/v1/tools":
                 return self._send(200, {"result": [t.spec() | {"risk": t.risk, "toolset": t.toolset} for t in engine.registry.list()]})
             if p == "/v1/tasks":
@@ -209,7 +231,15 @@ def main(argv: list[str] | None = None) -> None:
     a = ap.parse_args(argv)
     info = json.loads((a.data_dir / "runtime" / "core.json").read_text())
     core = CoreClient(int(info["port"]), info["engine_token"])
-    engine = Engine(a.data_dir, core)
+    startup_secret = None
+    try:
+        startup = json.loads(sys.stdin.buffer.read() or b"{}")
+        kind, secret = startup.get("provider_kind"), startup.get("api_key")
+        if isinstance(kind, str) and isinstance(secret, str) and secret:
+            startup_secret = (kind, secret)
+    except (json.JSONDecodeError, AttributeError):
+        startup_secret = None
+    engine = Engine(a.data_dir, core, startup_secret)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(engine, info["ui_token"], a.origin))
     srv.daemon_threads = True
     print(f"atlas-engine {__version__} on 127.0.0.1:{a.port}", file=sys.stderr)

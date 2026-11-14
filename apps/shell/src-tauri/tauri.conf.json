@@ -5,19 +5,44 @@
   "identifier": "org.projectatlas.Atlas",
   "build": {
     "frontendDist": "../dist",
-    "beforeBuildCommand": "node build.mjs"
+    "beforeBuildCommand": "node build-desktop.mjs"
   },
   "app": {
-    "windows": [{ "title": "Atlas", "width": 1440, "height": 900, "minWidth": 960, "minHeight": 600 }],
-    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost" }
+    "windows": [
+      {
+        "title": "Atlas",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage"],
-    "category": "Office",
+    "icon": ["icons/icon.png"],
+    "targets": [
+      "deb",
+      "appimage"
+    ],
+    "category": "Productivity",
     "shortDescription": "Private AI productivity suite for Ubuntu",
     "linux": {
-      "deb": { "depends": ["python3 (>= 3.12)", "xdg-desktop-portal-gnome", "at-spi2-core"] }
+      "deb": {
+        "depends": [
+          "python3 (>= 3.12)",
+          "xdg-desktop-portal-gnome",
+          "at-spi2-core"
+        ]
+      }
+    },
+    "resources": {
+      "target/desktop-resources/bin/atlas-core-host": "bin/atlas-core-host",
+      "target/desktop-resources/engine/": "engine/"
     }
   }
 }

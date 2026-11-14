@@ -9,14 +9,16 @@
     "test": "pnpm test:core && pnpm test:engine && pnpm test:e2e",
     "test:core": "cargo test --manifest-path crates/atlas-core/Cargo.toml",
     "test:engine": "cd services/engine && python3 -m pytest -q",
-    "test:e2e": "tests/e2e/run.sh"
+    "test:e2e": "tests/e2e/run.sh",
+    "build:desktop": "cd apps/shell && tauri build"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
     "playwright": "^1.50.0",
     "typescript": "^5.6.0",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "@tauri-apps/cli": "^2.0.0"
   },
   "dependencies": {
     "react": "^19.2.0",

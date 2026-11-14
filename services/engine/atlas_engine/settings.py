@@ -43,4 +43,6 @@ class Settings:
         p = self.get("provider")
         if not p:
             return None
-        return {k: v for k, v in p.items() if k != "api_key"} | {"has_api_key": bool(p.get("api_key"))}
+        return {k: v for k, v in p.items() if k != "api_key"} | {
+            "has_api_key": bool(p.get("api_key"))
+        }
