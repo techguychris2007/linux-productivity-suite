@@ -81,7 +81,7 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   // ---------- save ----------
   const persist = useCallback(async () => {
     const d = docRefLatest.current;
-    if (!d) return;
+    if (!d) return false;
     window.clearTimeout(saveTimer.current);
     setSave("saving");
     const title = plainText(d.blocks.find((b) => b.type === "title")?.html) || d.title;
@@ -89,7 +89,8 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
     try {
       await bridge.core("fs.write_text", { grant: docRef.grant, path: docRef.path, content: JSON.stringify(clean, null, 1), overwrite: true, backup: false });
       setSave((s) => (docRefLatest.current === d ? "saved" : s === "saving" ? "dirty" : s));
-    } catch (e: any) { setSave("error"); notify({ tone: "danger", title: "Couldn't save", body: e.message }); }
+      return true;
+    } catch (e: any) { setSave("error"); notify({ tone: "danger", title: "Couldn't save", body: e.message }); return false; }
   }, [bridge, docRef, notify]);
 
   const update = useCallback((fn: (d: AtlasDoc) => AtlasDoc, opts?: { snapshot?: boolean }) => {
@@ -176,6 +177,8 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   const focused = doc?.blocks.find((b) => b.id === focusId) ?? null;
   const setType = (t: TextType) => { if (focused && isText(focused.type)) setBlock(focused.id, { type: t }, true); };
   const setAlign = (a: Align) => { if (focused && isText(focused.type)) setBlock(focused.id, { align: a === "left" ? undefined : a }, true); };
+  const setPageText = (field: "header" | "footer", value: string) =>
+    update((d) => ({ ...d, page: { ...d.page, [field]: value.slice(0, 300) } }));
   const exec = (cmd: string, value?: string) => { document.execCommand(cmd, false, value); };
   const insertBlock = (nb: Block) => insertAfter(focusId ?? doc?.blocks[doc.blocks.length - 1]?.id ?? null, nb);
 
@@ -190,7 +193,7 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   const doExport = async (format: "docx" | "pdf" | "odt") => {
     setExporting(format);
     try {
-      await persist();
+      if (!await persist()) return;
       const r = await bridge.engine<{ path: string }>("POST", "/writer/export", { grant: docRef.grant, path: docRef.path, format });
       notify({ tone: "success", title: `Exported ${r.path}`, body: `Saved in ${grantLabel}` });
     } catch (e: any) { notify({ tone: "danger", title: "Export failed", body: e.message }); }
@@ -219,7 +222,7 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   let n = 0;
   const textFocused = !!focused && isText(focused.type);
   const saveLabel = save === "saved" ? <><LuCheck /> Saved to {grantLabel}</> : save === "saving" ? "Saving…" : save === "dirty" ? "Unsaved changes" : "Not saved";
-  const close = async () => { await persist(); onClose(); };
+  const close = async () => { if (await persist()) onClose(); };
   const exportTiles = (
     <div className="rb-bs-tiles">
       {([["docx", "Word document", ".docx — opens in Microsoft Word and LibreOffice"], ["pdf", "PDF", ".pdf — fixed layout for sharing and printing"], ["odt", "OpenDocument text", ".odt — LibreOffice's native format"]] as const).map(([f, label, hint]) => (
@@ -386,6 +389,12 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
         <RBig icon={<LuFile />} label="A4" active={doc.page.size === "A4"} onClick={() => update((d) => ({ ...d, page: { ...d.page, size: "A4" } }), { snapshot: true })} />
         <RBig icon={<LuFile />} label="Letter" active={doc.page.size === "Letter"} onClick={() => update((d) => ({ ...d, page: { ...d.page, size: "Letter" } }), { snapshot: true })} />
       </> },
+      { label: "Header and footer", content: <RStack>
+        <RRow><label className="rb-field">Header <input aria-label="Page header" maxLength={300} value={doc.page.header ?? ""} placeholder="Text on each page"
+          onChange={(e) => setPageText("header", e.target.value)} /></label></RRow>
+        <RRow><label className="rb-field">Footer <input aria-label="Page footer" maxLength={300} value={doc.page.footer ?? ""} placeholder="Text on each page"
+          onChange={(e) => setPageText("footer", e.target.value)} /></label></RRow>
+      </RStack> },
     ] },
     { id: "view", label: "View", groups: [
       { label: "Zoom", content: <>
@@ -419,7 +428,9 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
         backstage={[
           { id: "info", label: "Info", icon: <LuInfo />, content: <BackstageSection title="Info">
             <dl className="rb-bs-facts"><dt>Name</dt><dd>{doc.title}</dd><dt>Location</dt><dd>{grantLabel} / {docRef.path}</dd>
-              <dt>Words</dt><dd>{words.toLocaleString()}</dd><dt>Page size</dt><dd>{doc.page.size}</dd><dt>Status</dt><dd>{saveLabel}</dd></dl>
+              <dt>Words</dt><dd>{words.toLocaleString()}</dd><dt>Page size</dt><dd>{doc.page.size}</dd>
+              {doc.page.header && <><dt>Header</dt><dd>{doc.page.header}</dd></>}{doc.page.footer && <><dt>Footer</dt><dd>{doc.page.footer}</dd></>}
+              <dt>Status</dt><dd>{saveLabel}</dd></dl>
           </BackstageSection> },
           { id: "export", label: "Export", icon: <LuDownload />, content: <BackstageSection title="Export">
             <p className="muted">Saves a copy next to this document in {grantLabel}.</p>{exportTiles}</BackstageSection> },
@@ -449,6 +460,7 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
         if (e.target === e.currentTarget && doc.blocks.length) { const last = doc.blocks[doc.blocks.length - 1]; if (isText(last.type)) { setCaret({ id: last.id, at: "end" }); setFocusId(last.id); e.preventDefault(); } else insertAfter(last.id, block("paragraph")); }
       }}>
         <article className={`w-page w-page-${doc.page.size}`} aria-label={doc.title} style={{ zoom: zoom / 100 }}>
+          {doc.page.header && <div className="w-page-margin w-page-header" aria-label="Page header preview">{doc.page.header}</div>}
           {doc.blocks.map((b) => {
             n = b.type === "numbered" ? n + 1 : 0;
             const cls = `${flash.has(b.id) ? "ai-flash" : ""} ${b.id === focusId ? "is-focused" : ""}`;
@@ -469,6 +481,7 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
                 onSplit={(before, after) => onSplit(b, before, after)} onMergeBack={(html) => onMergeBack(b, html)} />
             );
           })}
+          {doc.page.footer && <div className="w-page-margin w-page-footer" aria-label="Page footer preview">{doc.page.footer}</div>}
         </article>
       </div>
 

@@ -10,6 +10,7 @@ from ..core_client import CoreClient, CoreError
 from ..tools import ToolContext, ToolError, ToolRegistry, ToolResult
 from . import atlasdoc as ad
 from .converter import FORMATS, IMPORTABLE, ConversionError, LibreOffice
+from .page_parts import add_page_parts
 
 EXT = ".atlasdoc"
 
@@ -58,8 +59,15 @@ class WriterService:
             raise ToolError("format must be docx, odt or pdf", "invalid_arguments")
         doc = self.load(grant, path)
         try:
-            data = self.lo.convert_bytes(ad.to_html(doc).encode(), ".html", fmt, html_input=True)
-        except ConversionError as e:
+            html = ad.to_html(doc).encode()
+            header, footer = doc["page"].get("header", ""), doc["page"].get("footer", "")
+            if header or footer:
+                odt = self.lo.convert_bytes(html, ".html", "odt", html_input=True)
+                odt = add_page_parts(odt, header, footer)
+                data = odt if fmt == "odt" else self.lo.convert_bytes(odt, ".odt", fmt)
+            else:
+                data = self.lo.convert_bytes(html, ".html", fmt, html_input=True)
+        except (ConversionError, ValueError) as e:
             raise ToolError(str(e), "conversion_failed") from e
         out = posixpath.join(posixpath.dirname(path), _stem(path) + "." + FORMATS[fmt][0])
         r = self.core.call("fs.write_base64", grant=grant, path=out, data=base64.b64encode(data).decode(), overwrite=True)
@@ -112,13 +120,17 @@ def register(reg: ToolRegistry, svc: WriterService) -> None:
 
     @reg.tool("writer.create_document",
               "Create a new Writer document (.atlasdoc) with a title and content blocks. Use heading1/2/3 for structure, "
-              "paragraph for body text, bullet/numbered for list items (one block per item), quote, table and pagebreak.",
+              "paragraph for body text, bullet/numbered for list items (one block per item), quote, table and pagebreak. "
+              "Optional header and footer text repeat on every exported page.",
               {"type": "object", "properties": {"grant": _GRANT, "path": _DOC, "title": {"type": "string", "minLength": 1},
+                                                "header": {"type": "string", "maxLength": 300}, "footer": {"type": "string", "maxLength": 300},
                                                 "blocks": {"type": "array", "items": _BLOCK, "minItems": 1, "maxItems": 400}},
                "required": ["grant", "path", "title", "blocks"], "additionalProperties": False}, "write", "writer")
     def create(args, ctx: ToolContext):
         path = args["path"] if args["path"].endswith(EXT) else args["path"] + EXT
         doc = ad.new_document(args["title"], [ad.make_block("title", args["title"])] + _blocks_from_args(args["blocks"]))
+        doc["page"]["header"] = args.get("header", "")
+        doc["page"]["footer"] = args.get("footer", "")
         try:
             svc.save(args["grant"], path, doc, create=True)
         except CoreError as e:
@@ -128,13 +140,28 @@ def register(reg: ToolRegistry, svc: WriterService) -> None:
         s = ad.stats(doc)
         return ToolResult({"path": path, **s}, summary=f"Created {path} ({s['words']} words)", changed=changed(args["grant"], path))
 
-    @reg.tool("writer.read_document", "Read a Writer document as a numbered list of blocks (index, type, text).",
+    @reg.tool("writer.read_document", "Read a Writer document's page settings and numbered blocks (index, type, text).",
               {"type": "object", "properties": {"grant": _GRANT, "path": _DOC}, "required": ["grant", "path"], "additionalProperties": False},
               "read", "writer")
     def read(args, ctx):
         doc = svc.load(args["grant"], args["path"])
-        return ToolResult({"title": doc["title"], "blocks": ad.outline(doc), **ad.stats(doc)}, untrusted=True,
+        return ToolResult({"title": doc["title"], "page": doc["page"], "blocks": ad.outline(doc), **ad.stats(doc)}, untrusted=True,
                           source=f"document {args['path']}", summary=f"Read {args['path']} ({len(doc['blocks'])} blocks)")
+
+    @reg.tool("writer.update_page", "Update a document's page size, repeating header text, or repeating footer text.",
+              {"type": "object", "properties": {"grant": _GRANT, "path": _DOC,
+                                                  "size": {"type": "string", "enum": ["A4", "Letter"]},
+                                                  "header": {"type": "string", "maxLength": 300},
+                                                  "footer": {"type": "string", "maxLength": 300}},
+               "required": ["grant", "path"], "additionalProperties": False}, "write", "writer")
+    def update_page(args, ctx):
+        fields = ("size", "header", "footer")
+        if not any(k in args for k in fields):
+            raise ToolError("pass at least one page setting to update", "invalid_arguments")
+        doc = svc.load(args["grant"], args["path"])
+        doc["page"].update({k: args[k] for k in fields if k in args})
+        svc.save(args["grant"], args["path"], doc)
+        return ToolResult(doc["page"], summary=f"Updated page settings in {args['path']}", changed=changed(args["grant"], args["path"]))
 
     @reg.tool("writer.insert_blocks", "Insert blocks after the given block index (-1 inserts at the very start).",
               {"type": "object", "properties": {"grant": _GRANT, "path": _DOC, "after": {"type": "integer", "minimum": -1},

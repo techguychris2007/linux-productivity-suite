@@ -248,6 +248,9 @@ p { margin: 0; }
   width: 794px; max-width: 100%; min-height: 1123px; padding: 88px 96px; font-family: "Liberation Serif", "Tinos", Georgia, serif; font-size: 16px; line-height: 1.55; cursor: auto; }
 .w-page-Letter { width: 816px; min-height: 1056px; }
 [data-theme="dark"] .w-page { box-shadow: 0 0 0 1px #000, 0 10px 30px rgba(0,0,0,.6); }
+.w-page-margin { color: #656565; font: 12px/1.4 var(--font-ui); overflow-wrap: anywhere; }
+.w-page-header { margin: -38px 0 30px; padding-bottom: 8px; border-bottom: 1px solid #dedede; }
+.w-page-footer { margin-top: 48px; padding-top: 8px; border-top: 1px solid #dedede; }
 .wb { outline: none; margin: 0 0 10px; border-radius: 3px; position: relative; transition: background 600ms var(--ease); min-height: 1.55em; }
 .wb:empty::before { content: attr(data-placeholder); color: #a5a29c; pointer-events: none; }
 .wb:not(.is-focused):empty::before { content: ""; }

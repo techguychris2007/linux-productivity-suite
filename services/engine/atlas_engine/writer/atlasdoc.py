@@ -3,7 +3,7 @@
 A document is an ordered list of typed blocks. Inline formatting is a small, sanitised HTML subset.
 This structure is what Atlas AI edits through typed tools, and what LibreOffice converts to DOCX/ODT/PDF.
 
-  {"format": "atlas.doc", "version": 1, "title": str, "page": {"size": "A4"|"Letter"},
+  {"format": "atlas.doc", "version": 1, "title": str, "page": {"size": "A4"|"Letter", "header"?: str, "footer"?: str},
    "blocks": [{"id": str, "type": BlockType, "html": str, "align"?: str, "rows"?: [[str]]}]}
 """
 
@@ -202,7 +202,11 @@ def make_block(btype: str, text: str | None = None, html: str | None = None, row
 
 def new_document(title: str, blocks: list[dict] | None = None, page_size: str = "A4") -> dict:
     return validate({"format": "atlas.doc", "version": 1, "title": title.strip() or "Untitled document",
-                     "page": {"size": page_size}, "blocks": blocks or [make_block("paragraph", "")]})
+                     "page": {"size": page_size, "header": "", "footer": ""}, "blocks": blocks or [make_block("paragraph", "")]})
+
+
+def _page_text(value: Any) -> str:
+    return re.sub(r"[\x00-\x1f\x7f]", " ", str(value or ""))[:300].strip()
 
 
 def validate(doc: Any) -> dict:
@@ -243,7 +247,8 @@ def validate(doc: Any) -> dict:
         out.append(nb)
     page = doc.get("page") if isinstance(doc.get("page"), dict) else {}
     return {"format": "atlas.doc", "version": 1, "title": str(doc.get("title") or "Untitled document")[:300],
-            "page": {"size": page.get("size") if page.get("size") in ("A4", "Letter") else "A4"}, "blocks": out}
+            "page": {"size": page.get("size") if page.get("size") in ("A4", "Letter") else "A4",
+                     "header": _page_text(page.get("header")), "footer": _page_text(page.get("footer"))}, "blocks": out}
 
 
 def outline(doc: dict, max_chars: int = 400) -> list[dict]:

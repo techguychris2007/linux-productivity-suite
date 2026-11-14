@@ -5,7 +5,7 @@ export type BlockType = TextType | "table" | "pagebreak" | "image";
 export type Align = "left" | "center" | "right" | "justify";
 
 export interface Block { id: string; type: BlockType; html?: string; rows?: string[][]; align?: Align; src?: string; alt?: string; width?: number }
-export interface AtlasDoc { format: "atlas.doc"; version: 1; title: string; page: { size: "A4" | "Letter" }; blocks: Block[] }
+export interface AtlasDoc { format: "atlas.doc"; version: 1; title: string; page: { size: "A4" | "Letter"; header?: string; footer?: string }; blocks: Block[] }
 
 export const TEXT_TYPES: TextType[] = ["title", "heading1", "heading2", "heading3", "paragraph", "quote", "bullet", "numbered"];
 export const FONT_FAMILIES = ["Arial", "Calibri", "Cambria", "Georgia", "Inter", "Liberation Sans", "Liberation Serif", "Noto Sans", "Times New Roman", "Ubuntu"] as const;
@@ -20,7 +20,7 @@ export const block = (type: BlockType, html = ""): Block =>
   type === "table" ? { id: newId(), type, rows: [["", ""], ["", ""]] } : type === "pagebreak" ? { id: newId(), type } : { id: newId(), type, html };
 
 export function newDoc(title: string): AtlasDoc {
-  return { format: "atlas.doc", version: 1, title, page: { size: "A4" }, blocks: [{ ...block("title"), html: escapeHtml(title) }, block("paragraph")] };
+  return { format: "atlas.doc", version: 1, title, page: { size: "A4", header: "", footer: "" }, blocks: [{ ...block("title"), html: escapeHtml(title) }, block("paragraph")] };
 }
 
 export const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
