@@ -19,6 +19,9 @@ FORMATS = {
     "odt": ("odt", "odt:writer8"),
     "pdf": ("pdf", "pdf:writer_pdf_Export"),
     "html": ("html", "html:HTML (StarWriter)"),
+    # Spreadsheets (needs libreoffice-calc).
+    "xlsx": ("xlsx", "xlsx:Calc MS Excel 2007 XML"),
+    "ods": ("ods", "ods:calc8"),
 }
 IMPORTABLE = {".docx", ".doc", ".odt", ".rtf", ".html", ".htm", ".txt"}
 

@@ -27,6 +27,11 @@ _ALLOWED_SCHEMA_KEYS = {"type", "description", "properties", "required", "items"
 def _clean_schema(s: Any) -> Any:
     if isinstance(s, dict):
         out = {k: _clean_schema(v) for k, v in s.items() if k in _ALLOWED_SCHEMA_KEYS}
+        if isinstance(out.get("type"), list):  # Gemini takes one type: use the first non-null one, nullable if null was allowed
+            types = out["type"]
+            out["type"] = next((t for t in types if t != "null"), "string")
+            if "null" in types:
+                out["nullable"] = True
         if "properties" in s:
             out["properties"] = {k: _clean_schema(v) for k, v in s["properties"].items()}
             if not out["properties"]:

@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   LuBold, LuItalic, LuUnderline, LuStrikethrough, LuLink, LuList, LuListOrdered, LuQuote, LuTable, LuSeparatorHorizontal,
-  LuAlignLeft, LuAlignCenter, LuAlignRight, LuUndo2, LuRedo2, LuDownload, LuArrowLeft, LuSparkles, LuTrash2, LuPlus, LuMinus, LuCheck, LuRefreshCw,
+  LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify, LuUndo2, LuRedo2, LuDownload, LuArrowLeft, LuSparkles, LuTrash2, LuPlus, LuMinus, LuCheck, LuRefreshCw,
+  LuSubscript, LuSuperscript, LuRemoveFormatting, LuFile, LuFileText, LuFileDown, LuZoomIn, LuZoomOut, LuSearch, LuInfo, LuX, LuReplace,
 } from "react-icons/lu";
+import { Ribbon, RBig, RSmall, RStack, RRow, BackstageSection, Zoom, type RibbonTab } from "../ribbon/Ribbon";
 import type { EngineEvent } from "@atlas/shared-types";
 import { Button, IconButton, Spinner } from "@atlas/ui";
 import { useAtlas, type DocRef } from "../context";
@@ -22,7 +24,11 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   const [externalChange, setExternalChange] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
+  const [zoom, setZoom] = useState(100);
+  const [findOpen, setFindOpen] = useState<null | "find" | "replace">(null);
+  const [findText, setFindText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [matchCase, setMatchCase] = useState(false);
   const [linkUrl, setLinkUrl] = useState("https://");
   const savedRange = useRef<Range | null>(null);
   const past = useRef<AtlasDoc[]>([]);
@@ -194,68 +200,162 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
       if (k === "s") { e.preventDefault(); persist(); }
       else if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+      else if (k === "f" || k === "h") { e.preventDefault(); setFindOpen(k === "h" ? "replace" : "find"); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
   const words = useMemo(() => (doc ? wordCount(doc) : 0), [doc]);
+  const chars = useMemo(() => (doc ? doc.blocks.reduce((n, b) => n + plainText(b.html ?? "").length + (b.rows ?? []).flat().reduce((m, c) => m + plainText(c).length, 0), 0) : 0), [doc]);
 
   if (error) return <div className="page"><div className="banner banner-danger">{error}</div><Button icon={<LuArrowLeft />} onClick={onClose}>Back to documents</Button></div>;
   if (!doc) return <div className="page muted"><Spinner /> Opening…</div>;
 
   let n = 0;
+  const textFocused = !!focused && isText(focused.type);
+  const saveLabel = save === "saved" ? <><LuCheck /> Saved to {grantLabel}</> : save === "saving" ? "Saving…" : save === "dirty" ? "Unsaved changes" : "Not saved";
+  const close = async () => { await persist(); onClose(); };
+  const exportTiles = (
+    <div className="rb-bs-tiles">
+      {([["docx", "Word document", ".docx — opens in Microsoft Word and LibreOffice"], ["pdf", "PDF", ".pdf — fixed layout for sharing and printing"], ["odt", "OpenDocument text", ".odt — LibreOffice's native format"]] as const).map(([f, label, hint]) => (
+        <button key={f} className="rb-bs-tile" disabled={!!exporting} onClick={() => doExport(f)}>
+          {exporting === f ? <Spinner size={20} /> : <LuFileDown />}<strong>{label}</strong><span>{hint}</span>
+        </button>
+      ))}
+    </div>
+  );
+  // ---------- find & replace (text only; formatting tags are left intact) ----------
+  const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const findRe = findText ? new RegExp(escRe(findText), matchCase ? "g" : "gi") : null;
+  const matches = findRe ? doc.blocks.reduce((n, b0) => n + (plainText(b0.html ?? "").match(findRe)?.length ?? 0) + (b0.rows ?? []).flat().reduce((m, c) => m + (plainText(c).match(findRe)?.length ?? 0), 0), 0) : 0;
+  const replaceInHtml = (html: string, re: RegExp, to: string) => {
+    const box = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html").body.firstElementChild!;
+    const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) n.textContent = (n.textContent ?? "").replace(re, () => to);
+    return sanitize(box.innerHTML);
+  };
+  const findNext = () => {
+    if (!findText) return;
+    const w = window as any;
+    if (typeof w.find === "function" && (w.find(findText, matchCase, false, true) || w.find(findText, matchCase, false, true))) return;
+    notify({ tone: "info", title: matches ? `${matches} matches` : `"${findText}" was not found` });
+  };
+  const replaceOne = () => {
+    const sel = window.getSelection();
+    const selected = sel?.toString() ?? "";
+    if (findText && (matchCase ? selected === findText : selected.toLowerCase() === findText.toLowerCase())) document.execCommand("insertText", false, replaceText);
+    findNext();
+  };
+  const replaceAll = () => {
+    if (!findRe || !matches) { notify({ tone: "info", title: `"${findText}" was not found` }); return; }
+    const count = matches;
+    update((d) => ({ ...d, blocks: d.blocks.map((b0) => ({ ...b0, ...(b0.html !== undefined ? { html: replaceInHtml(b0.html, findRe, replaceText) } : {}), ...(b0.rows ? { rows: b0.rows.map((r) => r.map((c) => replaceInHtml(c, findRe, replaceText))) } : {}) })) }), { snapshot: true });
+    notify({ tone: "success", title: `Replaced ${count} ${count === 1 ? "match" : "matches"}` });
+  };
+
+  const tabs: RibbonTab[] = [
+    { id: "home", label: "Home", groups: [
+      { label: "Undo", content: <RStack><RSmall icon={<LuUndo2 />} label="Undo (Ctrl Z)" onClick={undo} disabled={!past.current.length} /><RSmall icon={<LuRedo2 />} label="Redo (Ctrl Shift Z)" onClick={redo} disabled={!future.current.length} /></RStack> },
+      { label: "Font", content: <RStack>
+        <RRow>
+          <RSmall icon={<LuBold />} label="Bold (Ctrl B)" onClick={() => exec("bold")} />
+          <RSmall icon={<LuItalic />} label="Italic (Ctrl I)" onClick={() => exec("italic")} />
+          <RSmall icon={<LuUnderline />} label="Underline (Ctrl U)" onClick={() => exec("underline")} />
+          <RSmall icon={<LuStrikethrough />} label="Strikethrough" onClick={() => exec("strikeThrough")} />
+        </RRow>
+        <RRow>
+          <RSmall icon={<LuSubscript />} label="Subscript" onClick={() => exec("subscript")} />
+          <RSmall icon={<LuSuperscript />} label="Superscript" onClick={() => exec("superscript")} />
+          <RSmall icon={<LuRemoveFormatting />} label="Clear formatting" onClick={() => exec("removeFormat")} />
+        </RRow>
+      </RStack> },
+      { label: "Paragraph", content: <RStack>
+        <RRow>
+          <RSmall icon={<LuList />} label="Bulleted list" active={focused?.type === "bullet"} onClick={() => setType(focused?.type === "bullet" ? "paragraph" : "bullet")} />
+          <RSmall icon={<LuListOrdered />} label="Numbered list" active={focused?.type === "numbered"} onClick={() => setType(focused?.type === "numbered" ? "paragraph" : "numbered")} />
+          <RSmall icon={<LuQuote />} label="Quote" active={focused?.type === "quote"} onClick={() => setType(focused?.type === "quote" ? "paragraph" : "quote")} />
+        </RRow>
+        <RRow>
+          <RSmall icon={<LuAlignLeft />} label="Align left" active={textFocused && !focused!.align} onClick={() => setAlign("left")} />
+          <RSmall icon={<LuAlignCenter />} label="Align centre" active={focused?.align === "center"} onClick={() => setAlign("center")} />
+          <RSmall icon={<LuAlignRight />} label="Align right" active={focused?.align === "right"} onClick={() => setAlign("right")} />
+          <RSmall icon={<LuAlignJustify />} label="Justify" active={focused?.align === "justify"} onClick={() => setAlign("justify")} />
+        </RRow>
+      </RStack> },
+      { label: "Styles", content: <div className="rb-styles" role="listbox" aria-label="Paragraph style">
+        {(["paragraph", "title", "heading1", "heading2", "heading3", "quote"] as TextType[]).map((t) => (
+          <button key={t} role="option" aria-selected={focused?.type === t} className={`rb-style ${focused?.type === t ? "is-active" : ""}`} disabled={!textFocused} onClick={() => setType(t)}>
+            <span className={`rb-style-sample wb-${t}`} style={{ margin: 0, padding: 0, fontSize: t === "paragraph" || t === "quote" ? 13 : t === "title" ? 18 : t === "heading1" ? 16 : 14 }}>AaBbCc</span>
+            <span className="rb-style-name">{STYLE_LABELS[t]}</span>
+          </button>
+        ))}
+      </div> },
+      { label: "Editing", content: <RStack>
+        <RSmall icon={<LuSearch />} label="Find (Ctrl F)" showLabel onClick={() => setFindOpen("find")} />
+        <RSmall icon={<LuReplace />} label="Replace (Ctrl H)" showLabel onClick={() => setFindOpen("replace")} />
+      </RStack> },
+    ] },
+    { id: "insert", label: "Insert", groups: [
+      { label: "Tables", content: <RBig icon={<LuTable />} label="Table" onClick={() => insertBlock(block("table"))} /> },
+      { label: "Pages", content: <RBig icon={<LuSeparatorHorizontal />} label="Page break" onClick={() => insertBlock(block("pagebreak"))} /> },
+      { label: "Links", content: <div className="w-link">
+        <RBig icon={<LuLink />} label="Link" onClick={() => { const s = window.getSelection(); savedRange.current = s && s.rangeCount ? s.getRangeAt(0).cloneRange() : null; setLinkOpen(!linkOpen); }} />
+        {linkOpen && (
+          <form className="popover w-link-pop" onSubmit={(e) => { e.preventDefault(); applyLink(); }}>
+            <input autoFocus aria-label="Link address" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} />
+            <Button size="sm" variant="primary" type="submit">Apply</Button>
+          </form>
+        )}
+      </div> },
+    ] },
+    { id: "layout", label: "Layout", groups: [
+      { label: "Page setup", content: <>
+        <RBig icon={<LuFile />} label="A4" active={doc.page.size === "A4"} onClick={() => update((d) => ({ ...d, page: { ...d.page, size: "A4" } }), { snapshot: true })} />
+        <RBig icon={<LuFile />} label="Letter" active={doc.page.size === "Letter"} onClick={() => update((d) => ({ ...d, page: { ...d.page, size: "Letter" } }), { snapshot: true })} />
+      </> },
+    ] },
+    { id: "view", label: "View", groups: [
+      { label: "Zoom", content: <>
+        <RBig icon={<LuZoomOut />} label="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))} />
+        <RBig icon={<LuSearch />} label="100%" onClick={() => setZoom(100)} />
+        <RBig icon={<LuZoomIn />} label="Zoom in" onClick={() => setZoom((z) => Math.min(200, z + 10))} />
+      </> },
+      { label: "Atlas AI", content: <RBig icon={<LuSparkles />} label="Ask about this document" onClick={() => askAi(`In the open document "${docRef.path}", `)} /> },
+    ] },
+  ];
+
   return (
-    <div className="writer">
-      <div className="w-toolbar" role="toolbar" aria-label="Formatting" onMouseDown={(e) => { if ((e.target as HTMLElement).closest("button")) e.preventDefault(); }}>
-        <IconButton label="Back to documents" onClick={async () => { await persist(); onClose(); }}><LuArrowLeft /></IconButton>
-        <span className="w-sep" />
-        <IconButton label="Undo (Ctrl Z)" onClick={undo} disabled={!past.current.length}><LuUndo2 /></IconButton>
-        <IconButton label="Redo (Ctrl Shift Z)" onClick={redo} disabled={!future.current.length}><LuRedo2 /></IconButton>
-        <span className="w-sep" />
-        <select aria-label="Paragraph style" value={focused && isText(focused.type) ? focused.type : ""} disabled={!focused || !isText(focused.type)}
-          onChange={(e) => setType(e.target.value as TextType)}>
-          {!focused || !isText(focused.type) ? <option value="">Style</option> : null}
-          {TEXT_TYPES.map((t) => <option key={t} value={t}>{STYLE_LABELS[t]}</option>)}
-        </select>
-        <span className="w-sep" />
-        <IconButton label="Bold (Ctrl B)" onClick={() => exec("bold")}><LuBold /></IconButton>
-        <IconButton label="Italic (Ctrl I)" onClick={() => exec("italic")}><LuItalic /></IconButton>
-        <IconButton label="Underline (Ctrl U)" onClick={() => exec("underline")}><LuUnderline /></IconButton>
-        <IconButton label="Strikethrough" onClick={() => exec("strikeThrough")}><LuStrikethrough /></IconButton>
-        <div className="w-link">
-          <IconButton label="Link" onClick={() => { const s = window.getSelection(); savedRange.current = s && s.rangeCount ? s.getRangeAt(0).cloneRange() : null; setLinkOpen(!linkOpen); }}><LuLink /></IconButton>
-          {linkOpen && (
-            <form className="popover w-link-pop" onSubmit={(e) => { e.preventDefault(); applyLink(); }}>
-              <input autoFocus aria-label="Link address" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} />
-              <Button size="sm" variant="primary" type="submit">Apply</Button>
-            </form>
-          )}
-        </div>
-        <span className="w-sep" />
-        <IconButton label="Bulleted list" active={focused?.type === "bullet"} onClick={() => setType(focused?.type === "bullet" ? "paragraph" : "bullet")}><LuList /></IconButton>
-        <IconButton label="Numbered list" active={focused?.type === "numbered"} onClick={() => setType(focused?.type === "numbered" ? "paragraph" : "numbered")}><LuListOrdered /></IconButton>
-        <IconButton label="Quote" active={focused?.type === "quote"} onClick={() => setType(focused?.type === "quote" ? "paragraph" : "quote")}><LuQuote /></IconButton>
-        <span className="w-sep" />
-        <IconButton label="Align left" active={!!focused && !focused.align} onClick={() => setAlign("left")}><LuAlignLeft /></IconButton>
-        <IconButton label="Align centre" active={focused?.align === "center"} onClick={() => setAlign("center")}><LuAlignCenter /></IconButton>
-        <IconButton label="Align right" active={focused?.align === "right"} onClick={() => setAlign("right")}><LuAlignRight /></IconButton>
-        <span className="w-sep" />
-        <IconButton label="Insert table" onClick={() => insertBlock(block("table"))}><LuTable /></IconButton>
-        <IconButton label="Insert page break" onClick={() => insertBlock(block("pagebreak"))}><LuSeparatorHorizontal /></IconButton>
-        <div className="w-spacer" />
-        <div className="w-export">
-          <Button size="sm" icon={exporting ? <Spinner size={12} /> : <LuDownload />} disabled={!!exporting} aria-haspopup="menu" aria-expanded={exportOpen}
-            onClick={() => setExportOpen(!exportOpen)}>{exporting ? `Exporting ${exporting.toUpperCase()}…` : "Export"}</Button>
-          {exportOpen && (
-            <div className="popover w-export-menu" role="menu">
-              {([["docx", "Word document (.docx)"], ["pdf", "PDF (.pdf)"], ["odt", "OpenDocument (.odt)"]] as const).map(([f, label]) => (
-                <button key={f} role="menuitem" onClick={() => { setExportOpen(false); doExport(f); }}>{label}</button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="writer app-writer" style={{ position: "relative" }}>
+      <Ribbon appName="Writer" appIcon={<LuFileText />} title={doc.title} status={<span className={`w-save w-save-${save}`} aria-live="polite">{saveLabel}</span>}
+        onBack={close} tabs={tabs}
+        quick={<>
+          <button onClick={undo} disabled={!past.current.length} aria-label="Undo" title="Undo (Ctrl Z)"><LuUndo2 /></button>
+          <button onClick={redo} disabled={!future.current.length} aria-label="Redo" title="Redo (Ctrl Shift Z)"><LuRedo2 /></button>
+          <button onClick={() => askAi(`In the open document "${docRef.path}", `)} title="Ask Atlas AI about this document"><LuSparkles /> Atlas AI</button>
+        </>}
+        backstage={[
+          { id: "info", label: "Info", icon: <LuInfo />, content: <BackstageSection title="Info">
+            <dl className="rb-bs-facts"><dt>Name</dt><dd>{doc.title}</dd><dt>Location</dt><dd>{grantLabel} / {docRef.path}</dd>
+              <dt>Words</dt><dd>{words.toLocaleString()}</dd><dt>Page size</dt><dd>{doc.page.size}</dd><dt>Status</dt><dd>{saveLabel}</dd></dl>
+          </BackstageSection> },
+          { id: "export", label: "Export", icon: <LuDownload />, content: <BackstageSection title="Export">
+            <p className="muted">Saves a copy next to this document in {grantLabel}.</p>{exportTiles}</BackstageSection> },
+          { id: "close", label: "Close", icon: <LuX />, onSelect: close },
+        ]} />
+
+      {findOpen && (
+        <form className="w-find" role="search" onSubmit={(e) => { e.preventDefault(); findNext(); }}>
+          <input autoFocus aria-label="Find" placeholder="Find" value={findText} onChange={(e) => setFindText(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setFindOpen(null); }} />
+          {findOpen === "replace" && <input aria-label="Replace with" placeholder="Replace with" value={replaceText} onChange={(e) => setReplaceText(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setFindOpen(null); }} />}
+          <span className="muted w-find-count" aria-live="polite">{findText ? `${matches} ${matches === 1 ? "match" : "matches"}` : ""}</span>
+          <label className="w-find-case"><input type="checkbox" checked={matchCase} onChange={(e) => setMatchCase(e.target.checked)} /> Match case</label>
+          <Button size="sm" type="submit">Find next</Button>
+          {findOpen === "replace" ? <><Button size="sm" type="button" onClick={replaceOne}>Replace</Button><Button size="sm" type="button" variant="primary" onClick={replaceAll}>Replace all</Button></>
+            : <Button size="sm" type="button" variant="ghost" onClick={() => setFindOpen("replace")}>Replace…</Button>}
+          <IconButton label="Close find" onClick={() => setFindOpen(null)}><LuX /></IconButton>
+        </form>
+      )}
 
       {externalChange && (
         <div className="banner banner-info w-banner">Atlas AI changed this document while you were editing.
@@ -266,7 +366,7 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
       <div className="w-canvas" onMouseDown={(e) => {
         if (e.target === e.currentTarget && doc.blocks.length) { const last = doc.blocks[doc.blocks.length - 1]; if (isText(last.type)) { setCaret({ id: last.id, at: "end" }); setFocusId(last.id); e.preventDefault(); } else insertAfter(last.id, block("paragraph")); }
       }}>
-        <article className={`w-page w-page-${doc.page.size}`} aria-label={doc.title}>
+        <article className={`w-page w-page-${doc.page.size}`} aria-label={doc.title} style={{ zoom: zoom / 100 }}>
           {doc.blocks.map((b) => {
             n = b.type === "numbered" ? n + 1 : 0;
             const cls = `${flash.has(b.id) ? "ai-flash" : ""} ${b.id === focusId ? "is-focused" : ""}`;
@@ -284,15 +384,13 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
         </article>
       </div>
 
-      <footer className="w-status">
-        <span>{grantLabel} / {docRef.path}</span>
+      <footer className="doc-statusbar">
         <span>{words.toLocaleString()} words</span>
-        <span className={`w-save w-save-${save}`} aria-live="polite">
-          {save === "saved" && <><LuCheck /> Saved</>}{save === "saving" && <><Spinner size={11} /> Saving…</>}
-          {save === "dirty" && "Unsaved changes"}{save === "error" && "Not saved"}
-        </span>
-
+        <span>{chars.toLocaleString()} characters</span>
+        <span>{doc.page.size}</span>
+        <span className="grow" />
         <button className="link" onClick={() => askAi(`In the open document "${docRef.path}", `)}><LuSparkles /> Ask Atlas AI about this document</button>
+        <Zoom value={zoom} onChange={setZoom} />
       </footer>
     </div>
   );

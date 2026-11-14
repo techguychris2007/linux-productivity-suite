@@ -8,7 +8,7 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "openpyxl>=3.1"]  # openpyxl only checks exported XLSX in tests
 
 [project.scripts]
 atlas-engine = "atlas_engine.devserver:main"

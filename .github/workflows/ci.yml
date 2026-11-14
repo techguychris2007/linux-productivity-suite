@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-24.04
@@ -12,7 +16,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: pnpm/action-setup@v4
       - run: pnpm install
-      - run: pip install pytest
+      - run: pip install pytest openpyxl
       - run: cargo build --release --manifest-path crates/atlas-core/Cargo.toml
       - run: pnpm test:core
       - run: pnpm test:engine
@@ -21,7 +25,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: e2e-screenshots, path: tests/e2e/screenshots }
-  # Desktop packaging (.deb / AppImage) is enabled in Milestone 2 once src-tauri compiles.
 
   desktop-package:
     runs-on: ubuntu-24.04
@@ -47,3 +50,51 @@ jobs:
           path: apps/shell/src-tauri/target/release/bundle/
           if-no-files-found: error
           retention-days: 14
+
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, desktop-package]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: atlas-ubuntu-packages
+          path: package-artifact
+      - name: Prepare release assets and checksums
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          mapfile -d '' packages < <(find package-artifact -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0)
+          debs=0
+          appimages=0
+          for package in "${packages[@]}"; do
+            case "$package" in
+              *.deb) debs=$((debs + 1)) ;;
+              *.AppImage) appimages=$((appimages + 1)) ;;
+            esac
+            cp "$package" release-assets/
+          done
+          test "$debs" -gt 0
+          test "$appimages" -gt 0
+          cd release-assets
+          sha256sum ./*.deb ./*.AppImage > SHA256SUMS
+      - name: Check tag matches app version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          APP_VERSION=$(python3 -c 'import json; print(json.load(open("apps/shell/src-tauri/tauri.conf.json"))["version"])')
+          test "${RELEASE_TAG#v}" = "$APP_VERSION"
+      - name: Create draft GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Atlas ${{ github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            release-assets/*.deb
+            release-assets/*.AppImage
+            release-assets/SHA256SUMS
+          fail_on_unmatched_files: true

@@ -34,6 +34,7 @@ from .providers import PROVIDER_KINDS, ProviderError, make_provider
 from .providers.gemini import GeminiProvider
 from .settings import Settings
 from .sheets.service import SheetsService
+from .sheets import tools as sheets_tools
 from .tools import ToolError, ToolRegistry
 from .writer import service as writer_service
 from .writer.converter import LibreOffice
@@ -51,6 +52,7 @@ class Engine:
         if core:
             drive.register(self.registry, core)
             writer_service.register(self.registry, self.writer)
+            sheets_tools.register(self.registry, core, self.sheets)
         self._provider = None
         self._external_secret_kind, self._external_secret = startup_secret or (None, None)
         self.orch = Orchestrator(self.registry, self.bus, self.provider, approvals=core)

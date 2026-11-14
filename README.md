@@ -93,7 +93,7 @@ apps/shell/src-tauri/target/release/bundle/appimage/*.AppImage
 
 The desktop app starts and stops its local core and engine services with the window. The AppImage still requires a compatible system WebKitGTK library and Python 3.12 or newer.
 
-Sheets currently supports Atlas spreadsheet files (`.atlasheet`), CSV import/export, autosave in a shared folder, cell references and basic formulas (`+`, `-`, `*`, `/`, parentheses, `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`). XLSX import/export currently handles the first worksheet's values and formulas; formatting and additional worksheets are not preserved. Charts and AI spreadsheet editing are still in progress.
+Writer and Sheets use an Office-style ribbon (tabs, groups, File menu, zoom). Sheets supports typing into cells with keyboard navigation, about 110 formula functions, cell and number formatting, AutoSum, sorting, column/bar/line/pie charts, CSV and XLSX import/export (values and formulas of the first worksheet; formatting and charts are not written to XLSX yet), and Atlas AI spreadsheet tools. See documentation/research/OFFICE_FEATURE_INVENTORY.md for what is still missing compared with Microsoft Office.
 
 ## Development checks
 

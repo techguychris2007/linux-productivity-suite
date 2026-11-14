@@ -137,7 +137,7 @@ await step("Writer: create, type, format, autosave to disk", async () => {
   await page.locator(".wb-title", { hasText: "Meeting notes" }).waitFor();
   await page.locator(".wb-paragraph").first().click();
   await page.keyboard.type("Agenda");
-  await page.getByLabel("Paragraph style").selectOption("heading1");
+  await page.getByRole("option", { name: /Heading 1/ }).click();
   await page.locator(".wb-heading1").click();
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
@@ -159,16 +159,17 @@ await step("Writer: create, type, format, autosave to disk", async () => {
 });
 
 await step("Writer: export DOCX (real Word headings) and PDF", async () => {
-  await page.getByRole("button", { name: "Export" }).click();
-  await page.getByRole("menuitem", { name: /Word document/ }).click();
+  await page.getByRole("tab", { name: "File" }).click();
+  await page.locator(".rb-bs-item", { hasText: "Export" }).click();
+  await page.locator(".rb-bs-tile", { hasText: "Word document" }).click();
   await page.locator(".toast", { hasText: "Exported Meeting notes.docx" }).waitFor({ timeout: 30000 });
   const zip = await JSZip.loadAsync(readFileSync(`${DOCS}/Meeting notes.docx`));
   const xml = await zip.file("word/document.xml").async("string");
   assert.match(xml, /w:val="Heading1"/); assert.match(xml, /approved/);
-  await page.getByRole("button", { name: "Export" }).click();
-  await page.getByRole("menuitem", { name: /PDF/ }).click();
+  await page.locator(".rb-bs-tile", { hasText: "PDF" }).click();
   await page.locator(".toast", { hasText: "Exported Meeting notes.pdf" }).waitFor({ timeout: 30000 });
   assert.equal(readFileSync(`${DOCS}/Meeting notes.pdf`).subarray(0, 5).toString(), "%PDF-");
+  await page.getByRole("button", { name: "Close the File menu" }).click();
 });
 
 await step("Writer: Atlas AI edits the open document and it updates live", async () => {
@@ -184,7 +185,7 @@ await step("Writer: Atlas AI edits the open document and it updates live", async
 });
 
 await step("Writer: import a real Word file", async () => {
-  await page.getByRole("button", { name: "Back to documents" }).click();
+  await page.getByRole("button", { name: "Back to the file list" }).click();
   await page.locator(".import-list li", { hasText: "Old proposal.docx" }).getByRole("button", { name: "Open in Writer" }).click();
   await page.locator(".wb-heading1", { hasText: "Proposal" }).waitFor({ timeout: 30000 });
   await page.locator(".wb-paragraph b", { hasText: "private" }).waitFor();
@@ -197,10 +198,62 @@ await step("Atlas AI writes a report and exports it to Word", async () => {
   await page.locator(".ai-dock .goal", { hasText: "Write a short project report" }).waitFor();
   await page.locator(".ai-dock .status-completed").waitFor({ timeout: 30000 });
   assert.ok(existsSync(`${DOCS}/Project report.atlasdoc`) && existsSync(`${DOCS}/Project report.docx`));
-  await page.getByRole("button", { name: "Back to documents" }).click();
+  await page.getByRole("button", { name: "Back to the file list" }).click();
   await page.locator(".doc-card", { hasText: "Project report" }).click();
   await page.locator(".w-table td", { hasText: "Sheets" }).waitFor();
   await page.screenshot({ path: `${SHOTS}/11-writer-ai-report.png` });
+});
+
+await step("Writer: find and replace", async () => {
+  await page.getByRole("button", { name: "Back to the file list" }).click();
+  await page.locator(".doc-card", { hasText: "Meeting notes" }).click();
+  await page.locator(".wb-title").waitFor();
+  await page.keyboard.press("Control+h");
+  await page.getByLabel("Find", { exact: true }).fill("Second item");
+  await page.getByLabel("Replace with").fill("Final item");
+  await page.locator(".w-find-count", { hasText: "1 match" }).waitFor();
+  await page.getByRole("button", { name: "Replace all" }).click();
+  await page.locator(".wb-bullet", { hasText: "Final item" }).waitFor();
+  await page.locator(".w-save-saved").waitFor({ timeout: 8000 });
+  assert.match(readFileSync(`${DOCS}/Meeting notes.atlasdoc`, "utf8"), /Final item/);
+  await page.getByRole("button", { name: "Back to the file list" }).click();
+});
+
+await step("Sheets: type into cells, AutoSum, format, chart, XLSX", async () => {
+  await page.locator(".rail-btn", { hasText: "Sheets" }).click();
+  await page.getByRole("button", { name: "New spreadsheet" }).click();
+  await page.getByLabel("Name").fill("Budget");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await page.locator(".sg").waitFor();
+  const grid = page.getByLabel("Spreadsheet grid");
+  await grid.focus();
+  for (const key of ["I", "t", "e", "m", "Tab", "C", "o", "s", "t", "Enter", "R", "e", "n", "t", "Tab", "1", "2", "0", "0", "Enter",
+    "F", "o", "o", "d", "Tab", "4", "0", "0", "Enter", "Tab"]) await page.keyboard.press(key);
+  await page.keyboard.press("Alt+=");
+  assert.equal(await page.locator(".sg-input").inputValue(), "=SUM(B2:B3)");
+  await page.keyboard.press("Enter");
+  await page.getByLabel("Name box").fill("B2:B4"); await page.getByLabel("Name box").press("Enter");
+  await page.getByLabel("Number format").selectOption("currency");
+  await page.locator(".doc-statusbar", { hasText: "Sum:" }).waitFor();
+  await page.getByLabel("Name box").fill("A1:B3"); await page.getByLabel("Name box").press("Enter");
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: /Insert a column chart/ }).click();
+  await page.locator(".sg-chart svg").waitFor();
+  await page.getByRole("tab", { name: "Chart Design" }).waitFor();
+  await page.locator(".w-save-saved").waitFor({ timeout: 8000 });
+  const saved = JSON.parse(readFileSync(`${DOCS}/Budget.atlasheet`, "utf8"));
+  assert.equal(saved.cells[3][1], "=SUM(B2:B3)");
+  assert.equal(saved.formats.B2.num, "currency");
+  assert.equal(saved.charts[0].range, "A1:B3");
+  assert.equal(await page.locator(".sg tbody tr").nth(3).locator("td").nth(1).innerText().then((t) => /1,600/.test(t)), true);
+  await page.screenshot({ path: `${SHOTS}/13-sheets.png` });
+  await page.getByRole("tab", { name: "File" }).click();
+  await page.locator(".rb-bs-item", { hasText: "Export" }).click();
+  await page.locator(".rb-bs-tile", { hasText: "Excel workbook" }).click();
+  await page.locator(".toast", { hasText: "Exported Budget" }).waitFor({ timeout: 15000 });
+  assert.ok(existsSync(`${DOCS}/Budget.xlsx`));
+  await page.getByRole("button", { name: "Close the File menu" }).click();
+  await page.getByRole("button", { name: "Back to the file list" }).click();
 });
 
 await step("dark theme", async () => {
@@ -211,7 +264,6 @@ await step("dark theme", async () => {
   await page.locator(".rail-btn", { hasText: "Home" }).click();
   await page.screenshot({ path: `${SHOTS}/08-home-dark.png` });
   await page.locator(".rail-btn", { hasText: "Writer" }).click();
-  await page.getByRole("button", { name: "Back to documents" }).click();
   await page.locator(".doc-card", { hasText: "Meeting notes" }).click();
   await page.locator(".wb-title").waitFor();
   await page.screenshot({ path: `${SHOTS}/12-writer-dark.png` });

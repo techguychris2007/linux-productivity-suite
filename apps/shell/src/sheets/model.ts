@@ -1,5 +1,12 @@
+import { display, ERRORS, evaluate, literal, serialToDate } from "./formula";
 export type Grid = string[][];
-export interface AtlasSheet { format: "atlas.sheet"; version: 1; title: string; cells: Grid }
+export type NumFormat = "general" | "number" | "currency" | "percent" | "date";
+export type CellAlign = "left" | "center" | "right";
+export interface CellFormat { b?: boolean; i?: boolean; u?: boolean; align?: CellAlign; num?: NumFormat; cur?: string; dp?: number }
+export type ChartType = "column" | "bar" | "line" | "pie";
+/** A chart drawn from a range; position and size are in grid pixels at 100% zoom. */
+export interface SheetChart { id: string; type: ChartType; range: string; title: string; x: number; y: number; w: number; h: number }
+export interface AtlasSheet { format: "atlas.sheet"; version: 1; title: string; cells: Grid; formats?: Record<string, CellFormat>; charts?: SheetChart[] }
 
 export const ROWS = 80;
 export const COLS = 20;
@@ -24,84 +31,81 @@ export function normalizeSheet(value: any, title = "Untitled spreadsheet"): Atla
   value.cells.slice(0, ROWS).forEach((row: unknown, r: number) => {
     if (Array.isArray(row)) row.slice(0, COLS).forEach((cell, c) => { cells[r][c] = String(cell ?? ""); });
   });
-  return { format: "atlas.sheet", version: 1, title: String(value.title || title), cells };
+  const formats: Record<string, CellFormat> = {};
+  if (value.formats && typeof value.formats === "object") {
+    for (const [key, f] of Object.entries(value.formats as Record<string, any>)) {
+      const ix = cellIndex(key);
+      if (!ix || ix[0] >= ROWS || ix[1] >= COLS || !f || typeof f !== "object") continue;
+      const clean = cleanFormat(f);
+      if (Object.keys(clean).length) formats[key.toUpperCase()] = clean;
+    }
+  }
+  const charts: SheetChart[] = Array.isArray(value.charts) ? value.charts.filter((c: any) => c && CHART_TYPES.includes(c.type) && rangeBounds(String(c.range ?? "")))
+    .slice(0, 20).map((c: any, i: number) => ({
+      id: String(c.id || `chart${i + 1}`), type: c.type, range: String(c.range).toUpperCase(), title: String(c.title ?? "").slice(0, 120),
+      x: num(c.x, 0, 4000, 560), y: num(c.y, 0, 4000, 40), w: num(c.w, 240, 1200, 440), h: num(c.h, 180, 900, 280),
+    })) : [];
+  return { format: "atlas.sheet", version: 1, title: String(value.title || title), cells, formats, charts };
 }
 
-const tokenize = (s: string) => {
-  s = s.trim();
-  const tokens: string[] = [];
-  const re = /\s*(?:(\$?[A-Z]{1,3}\$?[1-9]\d*(?::\$?[A-Z]{1,3}\$?[1-9]\d*)?)|([A-Z]+)|((?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|("(?:[^"]|"")*")|([()+\-*/^,]))/gy;
-  let pos = 0;
-  while (pos < s.length) {
-    re.lastIndex = pos;
-    const m = re.exec(s);
-    if (!m) throw new Error("#ERROR!");
-    tokens.push(m[1] || m[2] || m[3] || m[4] || m[5]);
-    pos = re.lastIndex;
-  }
-  return tokens;
-};
+export const CHART_TYPES: ChartType[] = ["column", "bar", "line", "pie"];
+export const CURRENCIES = ["USD", "EUR", "GBP", "GHS", "NGN", "KES", "ZAR", "INR", "JPY", "CNY", "CAD", "AUD"];
+const num = (v: unknown, min: number, max: number, fallback: number) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback; };
+export function cleanFormat(f: any): CellFormat {
+  const out: CellFormat = {};
+  if (f.b) out.b = true; if (f.i) out.i = true; if (f.u) out.u = true;
+  if (["left", "center", "right"].includes(f.align)) out.align = f.align;
+  if (["number", "currency", "percent", "date"].includes(f.num)) out.num = f.num;
+  if (typeof f.cur === "string" && /^[A-Z]{3}$/.test(f.cur)) out.cur = f.cur;
+  if (Number.isInteger(f.dp) && f.dp >= 0 && f.dp <= 6) out.dp = f.dp;
+  return out;
+}
 
+/** Parse "A1:C5" (or a single cell) into [top, left, bottom, right]. */
+export function rangeBounds(range: string): [number, number, number, number] | null {
+  const [a, b = a] = range.replace(/\$/g, "").toUpperCase().split(":");
+  const p = cellIndex(a), q = cellIndex(b);
+  if (!p || !q) return null;
+  return [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])];
+}
+export const rangeName = (t: number, l: number, b: number, r: number) => t === b && l === r ? cellName(t, l) : `${cellName(t, l)}:${cellName(b, r)}`;
+
+export const isNumeric = (v: string) => v.trim() !== "" && Number.isFinite(Number(v)) && !v.startsWith("#");
+
+/** Display a calculated value with the cell's number format. */
+export function formatValue(value: string, f?: CellFormat): string {
+  if (!f?.num || !isNumeric(value)) return value;
+  const n = Number(value);
+  const dp = f.dp ?? 2;
+  try {
+    if (f.num === "date") return serialToDate(n).toLocaleDateString(undefined, { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" });
+    if (f.num === "percent") return new Intl.NumberFormat(undefined, { style: "percent", minimumFractionDigits: f.dp ?? 0, maximumFractionDigits: f.dp ?? 0 }).format(n);
+    if (f.num === "currency") return new Intl.NumberFormat(undefined, { style: "currency", currency: f.cur || "USD", minimumFractionDigits: dp, maximumFractionDigits: dp }).format(n);
+    return new Intl.NumberFormat(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp }).format(n);
+  } catch { return value; }
+}
+
+/** Calculate every cell. Returns display strings; use `evaluateTyped` for typed values. */
 export function evaluateGrid(grid: Grid): string[][] {
-  const cache = new Map<string, string>();
-  const visiting = new Set<string>();
-  const read = (r: number, c: number): string => {
-    if (r < 0 || c < 0 || r >= grid.length || c >= COLS) return "#REF!";
-    const key = `${r},${c}`;
-    if (cache.has(key)) return cache.get(key)!;
+  const typed = evaluateTyped(grid);
+  return typed.map((row) => row.map(display));
+}
+
+export function evaluateTyped(grid: Grid) {
+  type S = ReturnType<typeof literal>;
+  const cache = new Map<number, S>();
+  const visiting = new Set<number>();
+  const read = (r: number, c: number): S => {
+    const key = r * COLS + c;
+    const hit = cache.get(key);
+    if (hit !== undefined || cache.has(key)) return hit as S;
     const raw = grid[r]?.[c] ?? "";
-    if (!raw.startsWith("=")) return raw;
-    if (visiting.has(key)) return "#CYCLE!";
+    if (!raw.startsWith("=") || raw.length === 1) { const v = literal(raw); cache.set(key, v); return v; }
+    if (visiting.has(key)) return ERRORS.CYCLE;
     visiting.add(key);
-    let result = "#ERROR!";
-    try {
-      const ts = tokenize(raw.slice(1));
-      let i = 0;
-      const expr = (): number => { let v = term(); while (ts[i] === "+" || ts[i] === "-") { const op = ts[i++]; const b = term(); v = op === "+" ? v + b : v - b; } return v; };
-      const term = (): number => { let v = power(); while (ts[i] === "*" || ts[i] === "/") { const op = ts[i++]; const b = power(); if (op === "/" && b === 0) throw new Error("#DIV/0!"); v = op === "*" ? v * b : v / b; } return v; };
-      const power = (): number => { let v = primary(); if (ts[i] === "^") { i++; v = v ** power(); } return v; };
-      const primary = (): number => {
-        const t = ts[i++];
-        if (!t) throw new Error("#ERROR!");
-        if (t === "+") return primary();
-        if (t === "-") return -primary();
-        if (t === "(") { const v = expr(); if (ts[i++] !== ")") throw new Error("#ERROR!"); return v; }
-        if (/^(?:\d|\.)/.test(t)) return Number(t);
-        if (/^"/.test(t)) throw new Error("#VALUE!");
-        if (/^[A-Z]+$/i.test(t) && ts[i] === "(") {
-          const fn = t.toUpperCase(); i++;
-          const values: number[] = [];
-          while (ts[i] !== ")") {
-            const start = ts[i];
-            if (/^\$?[A-Z]{1,3}\$?[1-9]\d*:\$?[A-Z]{1,3}\$?[1-9]\d*$/i.test(start ?? "")) {
-              i++;
-              const [a, b] = start.replace(/\$/g, "").split(":").map((x) => cellIndex(x)!);
-              for (let rr = Math.min(a[0], b[0]); rr <= Math.max(a[0], b[0]); rr++) for (let cc = Math.min(a[1], b[1]); cc <= Math.max(a[1], b[1]); cc++) {
-                const v = read(rr, cc); if (v.startsWith("#")) throw new Error(v); // Like other spreadsheets, ranges skip blank and text cells.
-                if (v.trim() !== "") { const n = Number(v); if (Number.isFinite(n)) values.push(n); }
-              }
-            } else values.push(expr());
-            if (ts[i] === ",") i++; else if (ts[i] !== ")") throw new Error("#ERROR!");
-          }
-          i++;
-          if (fn === "SUM") return values.reduce((a, b) => a + b, 0);
-          if (fn === "AVERAGE") return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-          if (fn === "MIN") return values.length ? Math.min(...values) : 0;
-          if (fn === "MAX") return values.length ? Math.max(...values) : 0;
-          if (fn === "COUNT") return values.length;
-          throw new Error("#NAME?");
-        }
-        const ref = t.replace(/\$/g, "");
-        const ix = cellIndex(ref); if (!ix) throw new Error("#NAME?");
-        const v = read(ix[0], ix[1]);
-        if (v.startsWith("#")) throw new Error(v);
-        if (v.trim() === "") return 0;
-        const n = Number(v); if (!Number.isFinite(n)) throw new Error("#VALUE!"); return n;
-      };
-      const n = expr(); if (i !== ts.length || !Number.isFinite(n)) throw new Error("#ERROR!");
-      result = String(Number(n.toPrecision(12)));
-    } catch (e: any) { result = /^#/.test(e?.message) ? e.message : "#ERROR!"; }
-    visiting.delete(key); cache.set(key, result); return result;
+    const v = evaluate(raw.slice(1), read, grid.length, COLS);
+    visiting.delete(key); cache.set(key, v);
+    return v;
   };
   return grid.map((row, r) => row.map((_, c) => read(r, c)));
 }
