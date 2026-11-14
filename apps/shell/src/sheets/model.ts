@@ -77,7 +77,8 @@ export function evaluateGrid(grid: Grid): string[][] {
               i++;
               const [a, b] = start.replace(/\$/g, "").split(":").map((x) => cellIndex(x)!);
               for (let rr = Math.min(a[0], b[0]); rr <= Math.max(a[0], b[0]); rr++) for (let cc = Math.min(a[1], b[1]); cc <= Math.max(a[1], b[1]); cc++) {
-                const v = read(rr, cc); if (v.startsWith("#")) throw new Error(v); if (v.trim() !== "") { const n = Number(v); if (!Number.isFinite(n)) throw new Error("#VALUE!"); values.push(n); }
+                const v = read(rr, cc); if (v.startsWith("#")) throw new Error(v); // Like other spreadsheets, ranges skip blank and text cells.
+                if (v.trim() !== "") { const n = Number(v); if (Number.isFinite(n)) values.push(n); }
               }
             } else values.push(expr());
             if (ts[i] === ",") i++; else if (ts[i] !== ")") throw new Error("#ERROR!");

@@ -34,6 +34,14 @@ export function Drive() {
     if (e.kind === "dir") { setPath(e.path); return; }
     if (e.name.endsWith(".atlasdoc")) { openInWriter({ grant: grantId!, path: e.path }); return; }
     if (e.name.endsWith(".atlasheet")) { openInSheets({ grant: grantId!, path: e.path }); return; }
+    if (e.name.toLowerCase().endsWith(".xlsx")) {
+      if (grant?.access !== "readwrite") { notify({ tone: "warning", title: "This folder is read-only", body: "Choose a writable shared folder to import the workbook." }); return; }
+      setImporting(true);
+      try { const r = await bridge.engine<{ path: string }>("POST", "/sheets/import", { grant: grantId, path: e.path }); openInSheets({ grant: grantId!, path: r.path }); }
+      catch (err: any) { notify({ tone: "danger", title: "Workbook import failed", body: err.message }); }
+      finally { setImporting(false); }
+      return;
+    }
     if (!TEXT_EXT.test(e.name)) { setPreview({ entry: e, content: "", truncated: false }); return; }
     try {
       const r = await bridge.core<{ content: string; truncated: boolean }>("fs.read_text", { grant: grantId, path: e.path, max_bytes: 200_000 });

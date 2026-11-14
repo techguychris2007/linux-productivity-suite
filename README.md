@@ -93,7 +93,7 @@ apps/shell/src-tauri/target/release/bundle/appimage/*.AppImage
 
 The desktop app starts and stops its local core and engine services with the window. The AppImage still requires a compatible system WebKitGTK library and Python 3.12 or newer.
 
-Sheets currently supports Atlas spreadsheet files (`.atlasheet`), CSV import/export, autosave in a shared folder, cell references and basic formulas (`+`, `-`, `*`, `/`, parentheses, `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`). XLSX, charts and AI spreadsheet editing are still in progress.
+Sheets currently supports Atlas spreadsheet files (`.atlasheet`), CSV import/export, autosave in a shared folder, cell references and basic formulas (`+`, `-`, `*`, `/`, parentheses, `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`). XLSX import/export currently handles the first worksheet's values and formulas; formatting and additional worksheets are not preserved. Charts and AI spreadsheet editing are still in progress.
 
 ## Development checks
 

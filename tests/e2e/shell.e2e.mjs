@@ -37,9 +37,9 @@ await step("home renders launcher and greeting", async () => {
 });
 
 await step("planned apps are honest placeholders", async () => {
-  await page.locator(".rail-btn", { hasText: "Sheets" }).click();
+  await page.locator(".rail-btn", { hasText: "Slides" }).click();
   await page.getByText("Planned for").waitFor();
-  assert.ok(await page.getByText("Milestone 4").isVisible());
+  assert.ok(await page.getByText("Milestone 5").isVisible());
 });
 
 await step("share a folder in Settings", async () => {

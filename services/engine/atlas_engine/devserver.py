@@ -33,6 +33,7 @@ from .orchestrator import Orchestrator
 from .providers import PROVIDER_KINDS, ProviderError, make_provider
 from .providers.gemini import GeminiProvider
 from .settings import Settings
+from .sheets.service import SheetsService
 from .tools import ToolError, ToolRegistry
 from .writer import service as writer_service
 from .writer.converter import LibreOffice
@@ -46,6 +47,7 @@ class Engine:
         self.core = core
         self.lo = LibreOffice(data_dir / "engine" / "lo-profile")
         self.writer = writer_service.WriterService(core, self.lo) if core else None
+        self.sheets = SheetsService(core) if core else None
         if core:
             drive.register(self.registry, core)
             writer_service.register(self.registry, self.writer)
@@ -191,6 +193,12 @@ def make_handler(engine: Engine, ui_token: str, origin: str | None):
                     key = body.get("api_key") or (engine.settings.get("provider") or {}).get("api_key", "")
                     g = GeminiProvider(key, model="placeholder")
                     return self._send(200, {"result": {"models": g.list_models(), "suggested": g.pick_default_model()}})
+                if p in ("/v1/sheets/import", "/v1/sheets/export"):
+                    if not engine.sheets:
+                        return self._send(503, {"error": {"code": "unavailable", "message": "core not connected"}})
+                    if p.endswith("import"):
+                        return self._send(200, {"result": engine.sheets.import_file(body["grant"], body["path"])})
+                    return self._send(200, {"result": engine.sheets.export_file(body["grant"], body["path"])})
                 if p in ("/v1/writer/export", "/v1/writer/import"):
                     if not engine.writer:
                         return self._send(503, {"error": {"code": "unavailable", "message": "core not connected"}})
