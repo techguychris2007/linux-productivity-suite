@@ -90,7 +90,7 @@ _DOC = {"type": "string", "minLength": 1, "description": "Path of the .atlasdoc 
 _BLOCK = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "enum": list(ad.BLOCK_TYPES)},
+        "type": {"type": "string", "enum": [t for t in ad.BLOCK_TYPES if t != "image"]},
         "text": {"type": "string", "description": "Block text. Inline **bold**, *italic*, `code` and [link](https://…) are supported."},
         "rows": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}, "description": "Only for type=table: rows of cell texts; first row is the header."},
         "align": {"type": "string", "enum": list(ad.ALIGNS)},
@@ -151,7 +151,7 @@ def register(reg: ToolRegistry, svc: WriterService) -> None:
 
     @reg.tool("writer.update_block", "Change the type, text, alignment or table rows of one block.",
               {"type": "object", "properties": {"grant": _GRANT, "path": _DOC, "index": {"type": "integer", "minimum": 0},
-                                                "type": {"type": "string", "enum": list(ad.BLOCK_TYPES)}, "text": {"type": "string"},
+                                                "type": {"type": "string", "enum": [t for t in ad.BLOCK_TYPES if t != "image"]}, "text": {"type": "string"},
                                                 "rows": _BLOCK["properties"]["rows"], "align": {"type": "string", "enum": list(ad.ALIGNS)}},
                "required": ["grant", "path", "index"], "additionalProperties": False}, "write", "writer")
     def update(args, ctx):

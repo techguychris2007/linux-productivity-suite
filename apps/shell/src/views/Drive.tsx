@@ -9,7 +9,7 @@ const fmtSize = (n: number) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024)
 const fmtDate = (ms: number | null) => ms ? new Date(ms).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
 export function Drive() {
-  const { bridge, grants, notify, go, askAi, openInWriter, openInSheets } = useAtlas();
+  const { bridge, grants, notify, go, askAi, openInWriter, openInSheets, openInSlides } = useAtlas();
   const [importing, setImporting] = useState(false);
   const [grantId, setGrantId] = useState<string | null>(null);
   const [path, setPath] = useState("");
@@ -34,6 +34,7 @@ export function Drive() {
     if (e.kind === "dir") { setPath(e.path); return; }
     if (e.name.endsWith(".atlasdoc")) { openInWriter({ grant: grantId!, path: e.path }); return; }
     if (e.name.endsWith(".atlasheet")) { openInSheets({ grant: grantId!, path: e.path }); return; }
+    if (e.name.endsWith(".atlasdeck")) { openInSlides({ grant: grantId!, path: e.path }); return; }
     if (e.name.toLowerCase().endsWith(".xlsx")) {
       if (grant?.access !== "readwrite") { notify({ tone: "warning", title: "This folder is read-only", body: "Choose a writable shared folder to import the workbook." }); return; }
       setImporting(true);

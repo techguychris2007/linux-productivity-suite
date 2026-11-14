@@ -77,6 +77,9 @@ def clean_format(f: object) -> dict:
         out["cur"] = f["cur"]
     if isinstance(f.get("dp"), int) and not isinstance(f.get("dp"), bool) and 0 <= f["dp"] <= 6:
         out["dp"] = f["dp"]
+    for k in ("color", "fill"):
+        if isinstance(f.get(k), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", f[k]):
+            out[k] = f[k].lower()
     return out
 
 

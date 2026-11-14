@@ -33,14 +33,14 @@ Tier: **1** = this milestone, **2** = next, **3** = later.
 | Area | Office features | Atlas | Tier |
 |---|---|---|---|
 | Editing | type into cells, F2, Enter/Tab movement, arrow keys, Shift-select, drag-select, fill handle, undo/redo, cut/copy/paste (TSV), Delete clears | ⬜ → 1 (fill handle: 2) | 1 |
-| Formatting | bold/italic/underline, alignment, number formats (general, number, currency, percent, date), decimals ±, font colour, fill colour, borders, merge & centre, wrap text, column width | 🟡 → B/I/U, align, number/currency/percent, decimals in 1; colours, borders, merge, widths in 2 | 1–2 |
+| Formatting | bold/italic/underline, alignment, number formats (general, number, currency, percent, date), decimals ±, font colour, fill colour, borders, merge & centre, wrap text, column width | ✅ B/I/U, align, number/currency/percent/date, decimals, font & fill colours; borders, merge, widths in 2 | 1–2 |
 | Formulas | ~500 functions in 14 categories (logical, lookup/reference, text, date/time, math/trig, statistical, financial, information, database, engineering, cube, web, compatibility, dynamic arrays) | 🟡 5 → ~80 most-used (IF, IFS, AND/OR/NOT, IFERROR, SUMIF(S), COUNTIF(S), AVERAGEIF, ROUND*, ABS, INT, MOD, POWER, SQRT, PRODUCT, MEDIAN, STDEV, LARGE/SMALL, RANK, VLOOKUP/HLOOKUP/XLOOKUP/INDEX/MATCH, CONCAT/TEXTJOIN/LEFT/RIGHT/MID/LEN/UPPER/LOWER/PROPER/TRIM/SUBSTITUTE/FIND/TEXT/VALUE, DATE/TODAY/NOW/YEAR/MONTH/DAY/WEEKDAY/DAYS/EDATE/EOMONTH, PMT/FV/PV/NPV, ISNUMBER/ISBLANK/ISTEXT), comparison operators and `&` | 1 |
 | | cube, web service, LAMBDA/LET, dynamic-array spill (FILTER, SORT, UNIQUE, SEQUENCE) | ⬜ | 3 |
 | Formula bar | name box (jump to cell), fx, cancel/enter, click-to-reference while editing | ⬜ → 1 | 1 |
 | AutoSum and status-bar Sum / Average / Count of the selection | ✓ | ⬜ → 1 | 1 |
 | Charts | column, bar, line, pie, area, scatter, combo, chart title, legend, axis titles, Chart Design tab | ⬜ → column/bar/line/pie + title + legend + Chart Design in 1; area/scatter in 2 | 1 |
 | Data | sort, filter, remove duplicates, data validation, text to columns, flash fill, what-if | ⬜ → sort in 1; filter, validation in 2; flash fill 3 | 1–3 |
-| Structure | insert/delete rows & columns (with reference adjustment), multiple worksheets, freeze panes, hide rows/cols, named ranges, tables | ⬜ | 2 |
+| Structure | insert/delete rows & columns (with reference adjustment), multiple worksheets, freeze panes, hide rows/cols, named ranges, tables | 🟡 insert/delete rows & columns ✅, freeze top row ✅; rest ⬜ | 2 |
 | Analysis | conditional formatting, sparklines, PivotTables, slicers | ⬜ | 2–3 |
 | Review | comments/notes, protect sheet | ⬜ | 2 |
 | Files | XLSX import/export, CSV, ODS, print/PDF | ✅ XLSX, CSV; ODS/PDF 2 | — |
@@ -49,8 +49,8 @@ Tier: **1** = this milestone, **2** = next, **3** = later.
 
 | Tab | Office features | Atlas | Tier |
 |---|---|---|---|
-| Home | clipboard, font family/size/colour/highlight, B/I/U/S, sub/superscript, clear formatting, lists, indent, alignment incl. justify, line spacing, styles gallery, find/replace | 🟡 → ribbon, sub/sup, clear, justify, styles gallery done; find/replace in 1; fonts/colours/indent/spacing 2 | 1–2 |
-| Insert | tables, pictures, shapes, links, page break, header/footer, page numbers, symbols, equations, text box, comments | 🟡 tables, links, page breaks; pictures, header/footer 2 | 2 |
+| Home | clipboard, font family/size/colour/highlight, B/I/U/S, sub/superscript, clear formatting, lists, indent, alignment incl. justify, line spacing, styles gallery, find/replace | 🟡 ribbon, sub/sup, clear, justify, styles gallery, find/replace, font colour and highlight ✅; font family/size, indent/spacing 2 | 1–2 |
+| Insert | tables, pictures, shapes, links, page break, header/footer, page numbers, symbols, equations, text box, comments | 🟡 tables, links, page breaks, pictures (size, position, alt text) ✅; header/footer 2 | 2 |
 | Design | themes, colour schemes, watermark, page colour/borders | ⬜ | 3 |
 | Layout | margins, orientation, size, columns, breaks, indent/spacing | 🟡 size (A4/Letter); margins/orientation 2 | 2 |
 | References | table of contents, footnotes/endnotes, citations, captions, index | ⬜ → TOC 2 | 2–3 |
@@ -61,17 +61,20 @@ Tier: **1** = this milestone, **2** = next, **3** = later.
 
 ## PowerPoint → Atlas Slides (Milestone 5)
 
-Home (new slide, layouts, fonts, drawing), Insert (pictures, shapes, icons, tables, charts, video/audio, text box),
-Design (themes, variants, slide size, Designer ideas), Transitions (incl. Morph-style), Animations (entrance/emphasis/exit,
-timing), Slide Show (presenter view with notes and timer, rehearse), Review, View (normal, outline, sorter, notes).
-None is built yet; Slides follows Sheets and reuses the ribbon from this increment.
+**Available in the first Slides release:** Office-style ribbon, create/open/save Atlas `.atlasdeck` presentations, six layouts,
+five themes, editable and movable/resizable text boxes, slide reorder/duplicate/delete, speaker notes, outline and slide-sorter
+views, audience and presenter modes with a timer, PPTX export (including speaker notes), and `slides.*` AI tools for creating,
+reading, editing, reorganizing, theming, and exporting decks.
+
+**Still missing:** opening/importing PPTX, images and other media, shapes, tables, charts, transitions, animations, review tools,
+custom slide size, and design suggestions. The editor uses a fixed 16:9 canvas; its native `.atlasdeck` format is JSON.
 
 ## Other Office apps
 
 Access → Atlas Database (Milestone 7), OneNote → Notes (8), Forms → Forms (8), Visio → Diagram (8),
 Outlook / Teams → not planned for the suite.
 
-## Build order (this increment)
+## Milestone 4 build order
 
 1. Ribbon interface for Writer and Sheets.
 2. Sheets editor: in-cell editing, keyboard, ranges, clipboard, undo, formatting, number formats, AutoSum, status-bar stats, sort.

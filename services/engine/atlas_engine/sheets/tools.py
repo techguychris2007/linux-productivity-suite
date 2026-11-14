@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from ..core_client import CoreClient, CoreError
 from ..tools import ToolContext, ToolError, ToolRegistry, ToolResult
@@ -24,6 +25,8 @@ _FORMAT = {
         "number_format": {"type": "string", "enum": ["general", *sh.NUM_FORMATS]},
         "currency": {"type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217 code for number_format=currency, e.g. USD, EUR, GHS"},
         "decimals": {"type": "integer", "minimum": 0, "maximum": 6},
+        "font_color": {"type": "string", "description": "Hex colour like #1f4e79"},
+        "fill_color": {"type": "string", "description": "Hex background colour like #fff2cc"},
     },
 }
 
@@ -104,6 +107,11 @@ def apply_format(sheet: dict, rng: str, fmt: dict) -> int:
         patch["cur"] = fmt["currency"]
     if "decimals" in fmt:
         patch["dp"] = fmt["decimals"]
+    for src, dst in (("font_color", "color"), ("fill_color", "fill")):
+        if src in fmt:
+            if not re.fullmatch(r"#[0-9a-fA-F]{6}", fmt[src]):
+                raise ToolError(f"{src} must be a hex colour like #1f4e79", "invalid_arguments")
+            patch[dst] = fmt[src]
     formats = sheet.setdefault("formats", {})
     n = 0
     for r in range(t, bt + 1):

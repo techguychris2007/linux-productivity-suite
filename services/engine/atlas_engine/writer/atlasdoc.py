@@ -16,9 +16,41 @@ from html.parser import HTMLParser
 from typing import Any
 
 TEXT_TYPES = ("title", "heading1", "heading2", "heading3", "paragraph", "quote", "bullet", "numbered")
-BLOCK_TYPES = TEXT_TYPES + ("table", "pagebreak")
+BLOCK_TYPES = TEXT_TYPES + ("table", "pagebreak", "image")
 ALIGNS = ("left", "center", "right", "justify")
-INLINE_TAGS = {"b", "strong", "i", "em", "u", "s", "code", "sub", "sup", "br", "a"}
+INLINE_TAGS = {"b", "strong", "i", "em", "u", "s", "code", "sub", "sup", "br", "a", "span", "font"}
+IMAGE_RE = re.compile(r"^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$")
+MAX_IMAGE_CHARS = 4_000_000  # ~3 MB of image data per picture
+
+
+def _hex_colour(value: str | None) -> str | None:
+    """'#rrggbb' from '#rrggbb', '#rgb' or 'rgb(r, g, b)'; anything else is rejected."""
+    v = (value or "").strip().lower()
+    if re.fullmatch(r"#[0-9a-f]{6}", v):
+        return v
+    if re.fullmatch(r"#[0-9a-f]{3}", v):
+        return "#" + "".join(ch * 2 for ch in v[1:])
+    m = re.fullmatch(r"rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+)\s*)?\)", v)
+    if m and all(int(x) <= 255 for x in m.groups()[:3]) and (m.group(4) is None or float(m.group(4)) > 0):
+        return "#" + "".join(f"{int(x):02x}" for x in m.groups()[:3])
+    return None
+
+
+def _span_style(tag: str, attrs: dict) -> str | None:
+    """Canonical style for a colour/highlight span, or None to drop the tag (its text is kept)."""
+    color = bg = None
+    if tag == "font":
+        color = _hex_colour(attrs.get("color"))
+    for decl in (attrs.get("style") or "").split(";"):
+        if ":" not in decl:
+            continue
+        k, v = (x.strip().lower() for x in decl.split(":", 1))
+        if k == "color":
+            color = _hex_colour(v) or color
+        elif k in ("background-color", "background"):
+            bg = _hex_colour(v) or bg
+    parts = ([f"color: {color}"] if color else []) + ([f"background-color: {bg}"] if bg else [])
+    return "; ".join(parts) or None
 _TAG_NORMAL = {"strong": "b", "em": "i", "strike": "s", "del": "s"}
 
 
@@ -47,6 +79,14 @@ class _Sanitizer(HTMLParser):
         if tag == "br":
             self.out.append("<br>")
             return
+        if tag in ("span", "font"):
+            style = _span_style(tag, dict(attrs))
+            if style is None:
+                self.stack.append("")
+                return
+            self.out.append(f'<span style="{style}">')
+            self.stack.append("span")
+            return
         if tag == "a":
             href = dict(attrs).get("href") or ""
             if not re.match(r"^(https?:|mailto:)", href, re.I):
@@ -60,18 +100,20 @@ class _Sanitizer(HTMLParser):
 
     def handle_endtag(self, tag):
         tag = _TAG_NORMAL.get(tag, tag)
+        if tag == "font":
+            tag = "span"
         if tag in ("script", "style"):
             self.skip = max(0, self.skip - 1)
             return
         if self.skip or tag not in INLINE_TAGS or tag == "br":
             return
         # close up to the matching tag (repairs mis-nesting)
-        if tag in self.stack or (tag == "a" and "" in self.stack):
+        if tag in self.stack or (tag in ("a", "span") and "" in self.stack):
             while self.stack:
                 t = self.stack.pop()
                 if t:
                     self.out.append(f"</{t}>")
-                if t == tag or (tag == "a" and t == ""):
+                if t == tag or (tag in ("a", "span") and t == ""):
                     break
 
     def handle_data(self, data):
@@ -119,8 +161,8 @@ class DocError(ValueError):
 
 def make_block(btype: str, text: str | None = None, html: str | None = None, rows: list[list[str]] | None = None,
                align: str | None = None) -> dict:
-    if btype not in BLOCK_TYPES:
-        raise DocError(f"unknown block type '{btype}'. Use one of: {', '.join(BLOCK_TYPES)}")
+    if btype not in BLOCK_TYPES or btype == "image":
+        raise DocError(f"unknown block type '{btype}'. Use one of: {', '.join(t for t in BLOCK_TYPES if t != 'image')}")
     b: dict[str, Any] = {"id": new_id(), "type": btype}
     if btype == "table":
         if not rows or not all(isinstance(r, list) and r for r in rows):
@@ -164,6 +206,14 @@ def validate(doc: Any) -> dict:
                 raise DocError("table without rows")
             width = max(len(r) for r in rows if isinstance(r, list)) if rows else 1
             nb["rows"] = [[sanitize_inline(str(c)) for c in r] + [""] * (width - len(r)) for r in rows if isinstance(r, list)]
+        elif b["type"] == "image":
+            src = str(b.get("src", ""))
+            if len(src) > MAX_IMAGE_CHARS or not IMAGE_RE.match(src):
+                raise DocError("pictures must be PNG, JPEG, GIF or WebP data under 3 MB")
+            nb["src"] = src
+            nb["alt"] = str(b.get("alt") or "")[:300]
+            width = b.get("width")
+            nb["width"] = width if isinstance(width, int) and not isinstance(width, bool) and 10 <= width <= 100 else 100
         elif b["type"] != "pagebreak":
             nb["html"] = sanitize_inline(str(b.get("html", "")))
         if b.get("align") in ALIGNS:
@@ -182,6 +232,8 @@ def outline(doc: dict, max_chars: int = 400) -> list[dict]:
             text = " | ".join(inline_to_text(c) for c in b["rows"][0]) + f"  ({len(b['rows'])} rows)"
         elif b["type"] == "pagebreak":
             text = ""
+        elif b["type"] == "image":
+            text = f"[picture: {b['alt'] or 'no description'}]"
         else:
             text = inline_to_text(b["html"])
         res.append({"index": i, "type": b["type"], "text": text[:max_chars]})
@@ -227,6 +279,9 @@ def to_html(doc: dict) -> str:
         elif t == "table":
             rows = "".join("<tr>" + "".join(f"<td>{c or '&nbsp;'}</td>" for c in r) + "</tr>" for r in b["rows"])
             parts.append(f'<table border="1" cellpadding="5" cellspacing="0" width="100%"{st}>{rows}</table>')
+        elif t == "image":
+            alt = htmllib.escape(b.get("alt", ""), quote=True)
+            parts.append(f'<p{st}><img src="{b["src"]}" alt="{alt}" style="width: {b["width"]}%"></p>')
         elif t == "title":
             parts.append(f'<h1 class="title"{st}><font size="6">{b["html"]}</font></h1>')
         else:
@@ -284,7 +339,8 @@ def _inner_html(n: _Node) -> str:
         elif c.tag in _VOID:
             out.append(f"<{c.tag}>")
         else:
-            attrs = "".join(f' {k}="{htmllib.escape(v or "", quote=True)}"' for k, v in c.attrs.items() if k == "href")
+            attrs = "".join(f' {k}="{htmllib.escape(v or "", quote=True)}"' for k, v in c.attrs.items()
+                            if k == "href" or (k in ("style", "color") and c.tag in ("span", "font")))
             out.append(f"<{c.tag}{attrs}>{_inner_html(c)}</{c.tag}>")
     return "".join(out)
 

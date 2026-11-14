@@ -1,6 +1,6 @@
 # Project Atlas
 
-Project Atlas is a local-first productivity suite for Ubuntu. The current milestone includes the Atlas shell, a permission-controlled file access core, an AI assistant, and Writer with document import and export. Sheets, Slides, and other planned apps are not available yet.
+Project Atlas is a local-first productivity suite for Ubuntu. The available apps are Writer, Sheets, Slides, Drive, Settings, and Atlas AI. Other apps shown in the roadmap are still planned.
 
 Atlas does not include an AI model. You can connect it to Google Gemini, a local OpenAI-compatible model server such as Ollama, or Anthropic Claude. Using a hosted provider sends prompts to that provider; Atlas asks before sending a prompt. A local model can keep prompts on your computer.
 
@@ -93,7 +93,7 @@ apps/shell/src-tauri/target/release/bundle/appimage/*.AppImage
 
 The desktop app starts and stops its local core and engine services with the window. The AppImage still requires a compatible system WebKitGTK library and Python 3.12 or newer.
 
-Writer and Sheets use an Office-style ribbon (tabs, groups, File menu, zoom). Sheets supports typing into cells with keyboard navigation, about 110 formula functions, cell and number formatting, AutoSum, sorting, column/bar/line/pie charts, CSV and XLSX import/export (values and formulas of the first worksheet; formatting and charts are not written to XLSX yet), and Atlas AI spreadsheet tools. See documentation/research/OFFICE_FEATURE_INVENTORY.md for what is still missing compared with Microsoft Office.
+Writer, Sheets, and Slides use an Office-style ribbon (tabs, groups, File menu, zoom). Writer supports styled documents, images, find and replace, and DOCX/ODT/PDF export. Sheets supports cell editing, about 110 formula functions, formatting, AutoSum, sorting, charts, CSV and XLSX import/export (including common formats and charts), and Atlas AI spreadsheet tools. Slides supports editable 16:9 text slides, six layouts, five themes, speaker notes, presenter view, and PowerPoint export with notes. Slides files use Atlas's `.atlasdeck` format; importing existing PowerPoint files is not available yet. See the [Milestone 5 report](documentation/development/MILESTONE_5_REPORT.md) and [Office feature inventory](documentation/research/OFFICE_FEATURE_INVENTORY.md) for the current scope and remaining gaps.
 
 ## Development checks
 

@@ -157,9 +157,12 @@ impl<'a> Parser<'a> {
                     }
                 }
                 _ => {
-                    let rest = std::str::from_utf8(&self.b[self.i..]).map_err(|e| e.to_string())?;
-                    let ch = rest.chars().next().unwrap();
-                    out.push(ch); self.i += ch.len_utf8();
+                    // Copy the whole run up to the next quote or backslash at once. Re-validating the rest of the
+                    // input for every character made large bodies (e.g. documents with pictures) quadratic.
+                    // The input came from a &str and the run ends at an ASCII byte, so the slice is valid UTF-8.
+                    let start = self.i;
+                    while self.i < self.b.len() && self.b[self.i] != b'"' && self.b[self.i] != b'\\' { self.i += 1; }
+                    out.push_str(std::str::from_utf8(&self.b[start..self.i]).map_err(|e| e.to_string())?);
                 }
             }
         }
@@ -195,6 +198,15 @@ mod tests {
         assert_eq!(v.get("b").unwrap().as_str().unwrap(), "x\"y\né😀");
         let again = parse(&v.to_json()).unwrap();
         assert_eq!(v, again);
+    }
+    #[test]
+    fn large_strings_parse_in_linear_time() {
+        let big = "é".repeat(2_000_000);
+        let src = format!(r#"{{"content":"{}","n":1}}"#, big);
+        let t = std::time::Instant::now();
+        let v = parse(&src).unwrap();
+        assert_eq!(v.get("content").unwrap().as_str().unwrap().len(), big.len());
+        assert!(t.elapsed() < std::time::Duration::from_secs(2), "parsing 4 MB took {:?}", t.elapsed());
     }
     #[test]
     fn rejects_garbage() {

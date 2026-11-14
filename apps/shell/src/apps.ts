@@ -30,7 +30,7 @@ export const DEPARTMENTS: { id: Department; label: string }[] = [
 export const APPS: AtlasApp[] = [
   { id: "writer", name: "Writer", department: "productivity", icon: LuFileText, milestone: 3, available: true, blurb: "Documents with styles, tables, images and DOCX/PDF export.", keywords: ["word", "document", "docx"] },
   { id: "sheets", name: "Sheets", department: "productivity", icon: LuSheet, milestone: 4, available: true, blurb: "Spreadsheets with formulas, charts and CSV/XLSX.", keywords: ["excel", "spreadsheet", "xlsx", "csv"] },
-  { id: "slides", name: "Slides", department: "productivity", icon: LuPresentation, milestone: 5, available: false, blurb: "Presentations with themes, notes and presenter mode.", keywords: ["powerpoint", "deck", "pptx"] },
+  { id: "slides", name: "Slides", department: "productivity", icon: LuPresentation, milestone: 5, available: true, blurb: "Presentations with themes, notes and presenter mode.", keywords: ["powerpoint", "deck", "pptx"] },
   { id: "database", name: "Database", department: "productivity", icon: LuDatabase, milestone: 7, available: false, blurb: "Visual SQLite databases, queries, forms and reports.", keywords: ["access", "sql"] },
   { id: "pdf", name: "PDF", department: "productivity", icon: LuFileType, milestone: 7, available: false, blurb: "View, annotate, merge, split and fill PDFs.", keywords: ["acrobat"] },
   { id: "notes", name: "Notes", department: "productivity", icon: LuNotebookPen, milestone: 8, available: false, blurb: "Notebooks with sections, pages and study tools.", keywords: ["onenote"] },

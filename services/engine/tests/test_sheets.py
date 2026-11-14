@@ -137,3 +137,12 @@ def test_openpyxl_reads_the_exported_workbook():
     assert ws["A1"].font.b and ws["A1"].alignment.horizontal == "center" and ws["A4"].font.u == "single"
     assert ws["B5"].value is True and ws["C5"].value == "007"
     assert [type(c).__name__ for c in ws._charts] == ["BarChart", "PieChart", "LineChart", "BarChart"]
+
+
+def test_xlsx_keeps_font_and_fill_colours():
+    sheet = sh.new_sheet("Colours", [["Heading", "Value"], ["a", "1"]])
+    sheet["formats"] = {"A1": {"b": True, "color": "#1f4e79", "fill": "#fff2cc"}, "B1": {"fill": "#fff2cc"}, "B2": {"color": "#c00000"}}
+    back = import_xlsx(export_xlsx(sheet), "Colours")
+    assert back["formats"]["A1"] == {"b": True, "color": "#1f4e79", "fill": "#fff2cc"}
+    assert back["formats"]["B1"] == {"fill": "#fff2cc"} and back["formats"]["B2"] == {"color": "#c00000"}
+    assert sh.clean_format({"color": "red", "fill": "#12345g"}) == {}

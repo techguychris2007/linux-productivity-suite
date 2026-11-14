@@ -1,10 +1,10 @@
 // Atlas document model (mirror of services/engine/atlas_engine/writer/atlasdoc.py).
 
 export type TextType = "title" | "heading1" | "heading2" | "heading3" | "paragraph" | "quote" | "bullet" | "numbered";
-export type BlockType = TextType | "table" | "pagebreak";
+export type BlockType = TextType | "table" | "pagebreak" | "image";
 export type Align = "left" | "center" | "right" | "justify";
 
-export interface Block { id: string; type: BlockType; html?: string; rows?: string[][]; align?: Align }
+export interface Block { id: string; type: BlockType; html?: string; rows?: string[][]; align?: Align; src?: string; alt?: string; width?: number }
 export interface AtlasDoc { format: "atlas.doc"; version: 1; title: string; page: { size: "A4" | "Letter" }; blocks: Block[] }
 
 export const TEXT_TYPES: TextType[] = ["title", "heading1", "heading2", "heading3", "paragraph", "quote", "bullet", "numbered"];
@@ -27,6 +27,16 @@ export const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, 
 const ALLOWED = new Set(["B", "I", "U", "S", "CODE", "SUB", "SUP", "BR", "A"]);
 const RENAME: Record<string, string> = { STRONG: "B", EM: "I", STRIKE: "S", DEL: "S" };
 
+/** '#rrggbb' from '#rrggbb', '#rgb' or 'rgb(r, g, b)'; null for anything else (same rules as the engine). */
+export function hexColour(value: string | null | undefined): string | null {
+  const v = (value ?? "").trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(v)) return v;
+  if (/^#[0-9a-f]{3}$/.test(v)) return "#" + [...v.slice(1)].map((c) => c + c).join("");
+  const m = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(v);
+  if (m && [m[1], m[2], m[3]].every((x) => Number(x) <= 255) && (m[4] === undefined || Number(m[4]) > 0)) return "#" + [m[1], m[2], m[3]].map((x) => Number(x).toString(16).padStart(2, "0")).join("");
+  return null;
+}
+
 /** Keep only the inline subset Atlas documents allow (same rules as the engine). */
 export function sanitize(html: string): string {
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
@@ -42,6 +52,11 @@ export function sanitize(html: string): string {
       if (tag === "SPAN" || tag === "FONT") {
         const st = (el as HTMLElement).style;
         let inner = walk(el);
+        // Colour and highlight, in the same canonical form the engine writes.
+        const color = hexColour(st?.color) ?? (tag === "FONT" ? hexColour(el.getAttribute("color")) : null);
+        const bg = hexColour(st?.backgroundColor);
+        const css = [color && `color: ${color}`, bg && `background-color: ${bg}`].filter(Boolean).join("; ");
+        if (css && inner) inner = `<span style="${css}">${inner}</span>`;
         if (st?.fontWeight === "bold" || Number(st?.fontWeight) >= 600) inner = `<b>${inner}</b>`;
         if (st?.fontStyle === "italic") inner = `<i>${inner}</i>`;
         if (st?.textDecorationLine?.includes("underline")) inner = `<u>${inner}</u>`;

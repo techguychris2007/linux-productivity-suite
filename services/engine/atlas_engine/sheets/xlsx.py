@@ -143,19 +143,25 @@ class _Styles:
     """Collects the distinct cell formats of a sheet into styles.xml records."""
 
     def __init__(self) -> None:
-        self.fonts: list[tuple[bool, bool, bool]] = [(False, False, False)]
+        self.fonts: list[tuple[bool, bool, bool, str | None]] = [(False, False, False, None)]
+        self.fills: list[str | None] = [None, None]  # 0 = none, 1 = gray125 (both required by Excel)
         self.numfmts: dict[str, int] = {}
-        self.xfs: list[tuple[int, int, str | None]] = [(0, 0, None)]
+        self.xfs: list[tuple[int, int, str | None, int]] = [(0, 0, None, 0)]
 
     def index(self, f: dict) -> int:
-        font = (bool(f.get("b")), bool(f.get("i")), bool(f.get("u")))
+        font = (bool(f.get("b")), bool(f.get("i")), bool(f.get("u")), f.get("color"))
         if font not in self.fonts:
             self.fonts.append(font)
+        fill_id = 0
+        if f.get("fill"):
+            if f["fill"] not in self.fills:
+                self.fills.append(f["fill"])
+            fill_id = self.fills.index(f["fill"], 2)
         code = _excel_numfmt(f)
         fmt_id = 0
         if code is not None:
             fmt_id = self.numfmts.setdefault(code, 164 + len(self.numfmts))
-        xf = (self.fonts.index(font), fmt_id, f.get("align"))
+        xf = (self.fonts.index(font), fmt_id, f.get("align"), fill_id)
         if xf not in self.xfs:
             self.xfs.append(xf)
         return self.xfs.index(xf)
@@ -167,25 +173,33 @@ class _Styles:
             for code, i in self.numfmts.items():
                 ET.SubElement(nf, _tag(NS, "numFmt"), {"numFmtId": str(i), "formatCode": code})
         fonts = ET.SubElement(root, _tag(NS, "fonts"), {"count": str(len(self.fonts))})
-        for b, i, u in self.fonts:
+        for b, i, u, color in self.fonts:
             font = ET.SubElement(fonts, _tag(NS, "font"))
             for on, name in ((b, "b"), (i, "i"), (u, "u")):
                 if on:
                     ET.SubElement(font, _tag(NS, name))
             ET.SubElement(font, _tag(NS, "sz"), {"val": "11"})
+            if color:
+                ET.SubElement(font, _tag(NS, "color"), {"rgb": "FF" + color[1:].upper()})
             ET.SubElement(font, _tag(NS, "name"), {"val": "Calibri"})
-        fills = ET.SubElement(root, _tag(NS, "fills"), {"count": "2"})
+        fills = ET.SubElement(root, _tag(NS, "fills"), {"count": str(len(self.fills))})
         for pattern in ("none", "gray125"):
             ET.SubElement(ET.SubElement(fills, _tag(NS, "fill")), _tag(NS, "patternFill"), {"patternType": pattern})
+        for color in self.fills[2:]:
+            pf = ET.SubElement(ET.SubElement(fills, _tag(NS, "fill")), _tag(NS, "patternFill"), {"patternType": "solid"})
+            ET.SubElement(pf, _tag(NS, "fgColor"), {"rgb": "FF" + str(color)[1:].upper()})
+            ET.SubElement(pf, _tag(NS, "bgColor"), {"indexed": "64"})
         borders = ET.SubElement(root, _tag(NS, "borders"), {"count": "1"})
         ET.SubElement(borders, _tag(NS, "border"))
         sxf = ET.SubElement(root, _tag(NS, "cellStyleXfs"), {"count": "1"})
         ET.SubElement(sxf, _tag(NS, "xf"), {"numFmtId": "0", "fontId": "0", "fillId": "0", "borderId": "0"})
         xfs = ET.SubElement(root, _tag(NS, "cellXfs"), {"count": str(len(self.xfs))})
-        for font_id, fmt_id, align in self.xfs:
-            attrs = {"numFmtId": str(fmt_id), "fontId": str(font_id), "fillId": "0", "borderId": "0", "xfId": "0"}
+        for font_id, fmt_id, align, fill_id in self.xfs:
+            attrs = {"numFmtId": str(fmt_id), "fontId": str(font_id), "fillId": str(fill_id), "borderId": "0", "xfId": "0"}
             if font_id:
                 attrs["applyFont"] = "1"
+            if fill_id:
+                attrs["applyFill"] = "1"
             if fmt_id:
                 attrs["applyNumberFormat"] = "1"
             if align:
@@ -198,6 +212,12 @@ class _Styles:
         return _xml(root)
 
 
+def _rgb(node: ET.Element | None) -> str | None:
+    """'#rrggbb' from an ARGB colour; theme and indexed colours are not resolved."""
+    v = node.get("rgb", "") if node is not None else ""
+    return "#" + v[-6:].lower() if re.fullmatch(r"[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8}", v) else None
+
+
 def _read_styles(root: ET.Element) -> list[dict]:
     """Atlas format for each cellXfs index."""
     codes = {int(n.get("numFmtId", "0")): n.get("formatCode", "") for n in root.iter(_tag(NS, "numFmt")) if n.get("numFmtId", "").isdigit()}
@@ -207,13 +227,28 @@ def _read_styles(root: ET.Element) -> list[dict]:
         def on(name: str) -> bool:
             node = font.find(_tag(NS, name))
             return node is not None and node.get("val", "1") not in ("0", "false", "none")
-        fonts.append({k: True for k in ("b", "i", "u") if on(k)})
+        entry: dict = {k: True for k in ("b", "i", "u") if on(k)}
+        rgb = _rgb(font.find(_tag(NS, "color")))
+        if rgb and rgb != "#000000":
+            entry["color"] = rgb
+        fonts.append(entry)
+    fills = []
+    fills_node = root.find(_tag(NS, "fills"))
+    for fill in fills_node.findall(_tag(NS, "fill")) if fills_node is not None else []:
+        pf = fill.find(_tag(NS, "patternFill"))
+        fills.append(_rgb(pf.find(_tag(NS, "fgColor"))) if pf is not None and pf.get("patternType") == "solid" else None)
     out = []
     xfs = root.find(_tag(NS, "cellXfs"))
     for xf in xfs.findall(_tag(NS, "xf")) if xfs is not None else []:
         f: dict = {}
         try:
             f.update(fonts[int(xf.get("fontId", "0"))])
+        except (ValueError, IndexError):
+            pass
+        try:
+            fill = fills[int(xf.get("fillId", "0"))]
+            if fill:
+                f["fill"] = fill
         except (ValueError, IndexError):
             pass
         fmt_id = int(xf.get("numFmtId", "0")) if xf.get("numFmtId", "0").isdigit() else 0

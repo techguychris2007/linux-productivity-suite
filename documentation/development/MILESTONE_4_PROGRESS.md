@@ -13,13 +13,16 @@ Feature research and the full gap list: [OFFICE_FEATURE_INVENTORY.md](../researc
 **Writer**
 - Home (undo, font incl. sub/superscript and clear formatting, paragraph incl. justify, styles gallery, Find/Replace), Insert, Layout (A4/Letter), View (zoom, Atlas AI).
 - Find & Replace (Ctrl F / Ctrl H) with match count, match case, Replace and Replace all (formatting kept).
+- Font colour and highlight (stored as `<span style="color: #rrggbb">` / `background-color`, checked the same way in the shell and engine; kept on DOCX import and export).
+- Pictures (Insert → Picture): PNG, JPEG, GIF or WebP, scaled to at most 1600 px and stored in the document (limit about 3 MB each); a contextual Picture tab sets size (25–100%), position and alt text. Pictures are exported into DOCX/PDF/ODT.
 - Word and character counts in the status bar; export to DOCX/PDF/ODT from File → Export.
 
 **Sheets** — `apps/shell/src/sheets/SheetEditor.tsx`
 - Type straight into cells; F2 to edit; Enter/Tab movement (Enter returns to the column where a Tab run started); arrows, Shift-extend, drag-select, row/column/all selection, Page Up/Down, Ctrl Home.
 - Name box (type a cell or range to jump), cancel/enter buttons, click a cell to insert its reference while typing a formula.
 - Cut/copy/paste as tab-separated text (keeps formulas and formats inside Atlas), undo/redo, Delete clears.
-- Bold/italic/underline, alignment, number formats (number, currency with 12 currencies, percent, date) and decimals.
+- Bold/italic/underline, font and fill colours, alignment, number formats (number, currency with 12 currencies, percent, date) and decimals. Colours round-trip through XLSX.
+- Insert and delete rows and columns (Home → Cells); formula references, formats and chart ranges move with the data, and references to deleted cells become `#REF!`.
 - AutoSum (Alt =) and Sum/Average/Count/Min/Max; status bar Average, Count and Sum of the selection.
 - Sort A→Z / Z→A (keeps a header row), Find, gridlines toggle, freeze top row, zoom.
 - Charts: column, bar, line and pie from a range; movable and resizable; Chart Design tab (type, title, data range, delete). Colours use a validated colour-blind-safe palette with light and dark steps.
@@ -33,10 +36,14 @@ Feature research and the full gap list: [OFFICE_FEATURE_INVENTORY.md](../researc
 ## Still needed
 
 - XLSX: read more than the first worksheet; fills, borders and fonts beyond bold/italic/underline; chart styling beyond series colours. ODS export.
-- Insert/delete rows and columns with reference adjustment; multiple worksheets; column widths; fill handle; merge cells; borders and colours.
+- Multiple worksheets; column widths; fill handle; merge cells; borders.
 - Conditional formatting, data validation, filters, comments; dynamic-array functions.
-- Writer tier 2: fonts and colours, images, headers/footers, comments, table of contents.
-- Slides (Milestone 5) on the same ribbon.
+- Writer tier 2: font family and size, headers/footers, comments, table of contents.
+- Additional Sheets and Writer features listed above remain future work. Slides is tracked separately in [the Milestone 5 report](MILESTONE_5_REPORT.md).
+
+## Fixes
+
+- Core: the JSON parser re-validated the rest of the request for every character in a string, so large saves were quadratic (a document with a 1.4 MB picture never finished saving). It now copies runs of text at once; a 4 MB string parses in milliseconds, with a regression test.
 
 ## Verification (2026-11-14)
 

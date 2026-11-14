@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import {
   LuBold, LuItalic, LuUnderline, LuStrikethrough, LuLink, LuList, LuListOrdered, LuQuote, LuTable, LuSeparatorHorizontal,
   LuAlignLeft, LuAlignCenter, LuAlignRight, LuAlignJustify, LuUndo2, LuRedo2, LuDownload, LuArrowLeft, LuSparkles, LuTrash2, LuPlus, LuMinus, LuCheck, LuRefreshCw,
-  LuSubscript, LuSuperscript, LuRemoveFormatting, LuFile, LuFileText, LuFileDown, LuZoomIn, LuZoomOut, LuSearch, LuInfo, LuX, LuReplace,
+  LuSubscript, LuSuperscript, LuRemoveFormatting, LuFile, LuFileText, LuFileDown, LuZoomIn, LuZoomOut, LuSearch, LuInfo, LuX, LuReplace, LuBaseline, LuHighlighter, LuImage,
 } from "react-icons/lu";
 import { Ribbon, RBig, RSmall, RStack, RRow, BackstageSection, Zoom, type RibbonTab } from "../ribbon/Ribbon";
 import type { EngineEvent } from "@atlas/shared-types";
 import { Button, IconButton, Spinner } from "@atlas/ui";
 import { useAtlas, type DocRef } from "../context";
-import { type AtlasDoc, type Block, type TextType, type Align, STYLE_LABELS, TEXT_TYPES, block, isText, sanitize, wordCount, plainText } from "./model";
+import { type AtlasDoc, type Block, type TextType, type Align, STYLE_LABELS, TEXT_TYPES, block, isText, sanitize, wordCount, plainText, newId } from "./model";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 type Caret = { id: string; at: "start" | "end" } | null;
@@ -26,6 +26,8 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   const [linkOpen, setLinkOpen] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [findOpen, setFindOpen] = useState<null | "find" | "replace">(null);
+  const [ribbonTab, setRibbonTab] = useState("home");
+  const pictureInput = useRef<HTMLInputElement>(null);
   const [findText, setFindText] = useState("");
   const [replaceText, setReplaceText] = useState("");
   const [matchCase, setMatchCase] = useState(false);
@@ -254,6 +256,39 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
     notify({ tone: "success", title: `Replaced ${count} ${count === 1 ? "match" : "matches"}` });
   };
 
+  // ---------- colour / highlight (keeps the text selection while the colour picker has focus) ----------
+  const keepSelection = () => { const s0 = window.getSelection(); if (s0 && s0.rangeCount) savedRange.current = s0.getRangeAt(0).cloneRange(); };
+  const applyColour = (cmd: "foreColor" | "hiliteColor", value: string) => {
+    const s0 = window.getSelection();
+    const range = savedRange.current;
+    if (!range || !s0) return;
+    const host = (range.commonAncestorContainer instanceof Element ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement)?.closest<HTMLElement>("[contenteditable=true]");
+    if (!host) return;
+    host.focus({ preventScroll: true }); // execCommand only acts on a focused editable element
+    s0.removeAllRanges(); s0.addRange(range);
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand(cmd, false, value);
+    document.execCommand("styleWithCSS", false, "false");
+  };
+  const colourPicker = (cmd: "foreColor" | "hiliteColor", label: string, icon: React.ReactNode, initial: string) => (
+    <label className="rb-small rb-colour" title={label} onMouseDown={keepSelection}>
+      {icon}<span className="rb-colour-bar" style={{ background: initial }} />
+      <input type="color" aria-label={label} defaultValue={initial} onChange={(e) => applyColour(cmd, e.target.value)} />
+    </label>
+  );
+
+  // ---------- pictures ----------
+  const insertPicture = async (file?: File) => {
+    if (!file) return;
+    try {
+      const src = await pictureData(file);
+      insertBlock({ id: newId(), type: "image", src, alt: file.name.replace(/\.[^.]+$/, ""), width: 100 });
+      setRibbonTab("picture");
+    } catch (e: any) { notify({ tone: "danger", title: "Couldn't insert the picture", body: e.message }); }
+    finally { if (pictureInput.current) pictureInput.current.value = ""; }
+  };
+  const picture = focused?.type === "image" ? focused : null;
+
   const tabs: RibbonTab[] = [
     { id: "home", label: "Home", groups: [
       { label: "Undo", content: <RStack><RSmall icon={<LuUndo2 />} label="Undo (Ctrl Z)" onClick={undo} disabled={!past.current.length} /><RSmall icon={<LuRedo2 />} label="Redo (Ctrl Shift Z)" onClick={redo} disabled={!future.current.length} /></RStack> },
@@ -268,6 +303,8 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
           <RSmall icon={<LuSubscript />} label="Subscript" onClick={() => exec("subscript")} />
           <RSmall icon={<LuSuperscript />} label="Superscript" onClick={() => exec("superscript")} />
           <RSmall icon={<LuRemoveFormatting />} label="Clear formatting" onClick={() => exec("removeFormat")} />
+          {colourPicker("foreColor", "Font colour", <LuBaseline />, "#c00000")}
+          {colourPicker("hiliteColor", "Highlight colour", <LuHighlighter />, "#ffff00")}
         </RRow>
       </RStack> },
       { label: "Paragraph", content: <RStack>
@@ -297,6 +334,8 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
       </RStack> },
     ] },
     { id: "insert", label: "Insert", groups: [
+      { label: "Illustrations", content: <><RBig icon={<LuImage />} label="Picture" onClick={() => pictureInput.current?.click()} />
+        <input ref={pictureInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="visually-hidden" onChange={(e) => insertPicture(e.target.files?.[0])} /></> },
       { label: "Tables", content: <RBig icon={<LuTable />} label="Table" onClick={() => insertBlock(block("table"))} /> },
       { label: "Pages", content: <RBig icon={<LuSeparatorHorizontal />} label="Page break" onClick={() => insertBlock(block("pagebreak"))} /> },
       { label: "Links", content: <div className="w-link">
@@ -323,12 +362,22 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
       </> },
       { label: "Atlas AI", content: <RBig icon={<LuSparkles />} label="Ask about this document" onClick={() => askAi(`In the open document "${docRef.path}", `)} /> },
     ] },
+    ...(picture ? [{ id: "picture", label: "Picture", contextual: true, groups: [
+      { label: "Size", content: <>{[25, 50, 75, 100].map((w) => <RBig key={w} icon={<LuImage />} label={`${w}%`} active={(picture.width ?? 100) === w} onClick={() => setBlock(picture.id, { width: w }, true)} />)}</> },
+      { label: "Position", content: <RRow>
+        <RSmall icon={<LuAlignLeft />} label="Align left" active={!picture.align || picture.align === "left"} onClick={() => setBlock(picture.id, { align: undefined }, true)} />
+        <RSmall icon={<LuAlignCenter />} label="Centre" active={picture.align === "center"} onClick={() => setBlock(picture.id, { align: "center" }, true)} />
+        <RSmall icon={<LuAlignRight />} label="Align right" active={picture.align === "right"} onClick={() => setBlock(picture.id, { align: "right" }, true)} />
+      </RRow> },
+      { label: "Accessibility", content: <label className="rb-field">Alt text <input value={picture.alt ?? ""} placeholder="Describe the picture" onChange={(e) => setBlock(picture.id, { alt: e.target.value })} /></label> },
+      { label: "Delete", content: <RBig icon={<LuTrash2 />} label="Delete picture" onClick={() => remove(picture.id, false)} /> },
+    ] } as RibbonTab] : []),
   ];
 
   return (
     <div className="writer app-writer" style={{ position: "relative" }}>
       <Ribbon appName="Writer" appIcon={<LuFileText />} title={doc.title} status={<span className={`w-save w-save-${save}`} aria-live="polite">{saveLabel}</span>}
-        onBack={close} tabs={tabs}
+        onBack={close} tabs={tabs} activeTab={tabs.some((x) => x.id === ribbonTab) ? ribbonTab : "home"} onTab={setRibbonTab}
         quick={<>
           <button onClick={undo} disabled={!past.current.length} aria-label="Undo" title="Undo (Ctrl Z)"><LuUndo2 /></button>
           <button onClick={redo} disabled={!future.current.length} aria-label="Redo" title="Redo (Ctrl Shift Z)"><LuRedo2 /></button>
@@ -371,6 +420,12 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
             n = b.type === "numbered" ? n + 1 : 0;
             const cls = `${flash.has(b.id) ? "ai-flash" : ""} ${b.id === focusId ? "is-focused" : ""}`;
             if (b.type === "table") return <TableBlock key={b.id} b={b} cls={cls} onFocus={() => setFocusId(b.id)} onChange={(rows, snap) => setBlock(b.id, { rows }, snap)} onDelete={() => remove(b.id, false)} />;
+            if (b.type === "image") return (
+              <figure key={b.id} className={`w-figure ${cls}`} style={{ textAlign: b.align ?? "left" }} contentEditable={false}
+                onMouseDown={(e) => { e.preventDefault(); setFocusId(b.id); setRibbonTab("picture"); }}>
+                <img src={b.src} alt={b.alt ?? ""} style={{ width: `${b.width ?? 100}%` }} draggable={false} />
+              </figure>
+            );
             if (b.type === "pagebreak") return (
               <div key={b.id} className={`w-pagebreak ${cls}`} contentEditable={false}><span>Page break</span>
                 <IconButton label="Remove page break" onClick={() => remove(b.id, false)}><LuTrash2 /></IconButton></div>
@@ -495,4 +550,22 @@ function Cell({ html, header, onChange, label }: { html: string; header: boolean
   return <td ref={ref} className={header ? "is-header" : ""} contentEditable suppressContentEditableWarning aria-label={label}
     onInput={() => onChange(sanitize(ref.current!.innerHTML))}
     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) e.preventDefault(); }} />;
+}
+
+/** Read a picture as a data URL, scaling large photos down so documents stay small (max 1600 px, ~3 MB). */
+async function pictureData(file: File): Promise<string> {
+  if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) throw new Error("Use a PNG, JPEG, GIF or WebP picture.");
+  const raw = await new Promise<string>((ok, bad) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => bad(new Error("Couldn't read the file.")); r.readAsDataURL(file); });
+  if (file.type === "image/gif" && raw.length < 3_900_000) return raw; // keep animation
+  const img = await new Promise<HTMLImageElement>((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error("That file isn't a picture Atlas can read.")); i.src = raw; });
+  const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+  if (scale === 1 && raw.length < 3_900_000) return raw;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.naturalWidth * scale); canvas.height = Math.round(img.naturalHeight * scale);
+  canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  for (const q of [0.88, 0.75, 0.6]) {
+    const out = file.type === "image/png" && q === 0.88 ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", q);
+    if (out.length < 3_900_000) return out;
+  }
+  throw new Error("The picture is too large, even after shrinking it.");
 }

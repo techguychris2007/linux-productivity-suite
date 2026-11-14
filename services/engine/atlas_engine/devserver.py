@@ -35,6 +35,8 @@ from .providers.gemini import GeminiProvider
 from .settings import Settings
 from .sheets.service import SheetsService
 from .sheets import tools as sheets_tools
+from .slides import tools as slides_tools
+from .slides.service import SlidesService
 from .tools import ToolError, ToolRegistry
 from .writer import service as writer_service
 from .writer.converter import LibreOffice
@@ -49,10 +51,12 @@ class Engine:
         self.lo = LibreOffice(data_dir / "engine" / "lo-profile")
         self.writer = writer_service.WriterService(core, self.lo) if core else None
         self.sheets = SheetsService(core) if core else None
+        self.slides = SlidesService(core) if core else None
         if core:
             drive.register(self.registry, core)
             writer_service.register(self.registry, self.writer)
             sheets_tools.register(self.registry, core, self.sheets)
+            slides_tools.register(self.registry, self.slides)
         self._provider = None
         self._external_secret_kind, self._external_secret = startup_secret or (None, None)
         self.orch = Orchestrator(self.registry, self.bus, self.provider, approvals=core)
@@ -201,6 +205,10 @@ def make_handler(engine: Engine, ui_token: str, origin: str | None):
                     if p.endswith("import"):
                         return self._send(200, {"result": engine.sheets.import_file(body["grant"], body["path"])})
                     return self._send(200, {"result": engine.sheets.export_file(body["grant"], body["path"])})
+                if p == "/v1/slides/export":
+                    if not engine.slides:
+                        return self._send(503, {"error": {"code": "unavailable", "message": "core not connected"}})
+                    return self._send(200, {"result": engine.slides.export_file(body["grant"], body["path"])})
                 if p in ("/v1/writer/export", "/v1/writer/import"):
                     if not engine.writer:
                         return self._send(503, {"error": {"code": "unavailable", "message": "core not connected"}})

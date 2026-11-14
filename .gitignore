@@ -8,3 +8,6 @@ tests/e2e/screenshots/
 
 # Local recovery archive (do not commit the repository bundle)
 atlas-history.bundle
+
+# Generated Tauri schemas
+/apps/shell/src-tauri/gen/

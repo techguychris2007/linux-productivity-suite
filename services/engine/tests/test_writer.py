@@ -114,3 +114,41 @@ def test_writer_tools_end_to_end(core, tmp_path):
         imp = reg.call("writer.import", {"grant": grant, "path": "plan.docx"}, ctx)
         assert imp.content["path"] == "plan (1).atlasdoc"
         assert "Goals for Q4" in (docs / "plan (1).atlasdoc").read_text()
+
+
+# ---------------- colours and pictures ----------------
+_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+
+
+def test_colour_spans_are_kept_in_canonical_form_only():
+    s = ad.sanitize_inline('<span style="color: rgb(192, 0, 0);">red</span> <font color="#00f">blue</font> '
+                           '<span style="background-color:#ff0">hi</span> <span style="color:url(x);position:fixed">bad</span> '
+                           '<span style="background-color: rgba(0, 0, 0, 0)">clear</span> <span onclick="x">y</span>')
+    assert s == ('<span style="color: #c00000">red</span> <span style="color: #0000ff">blue</span> '
+                 '<span style="background-color: #ffff00">hi</span> bad clear y')
+    assert ad.sanitize_inline(s) == s  # stable when saved again
+
+
+def test_picture_blocks_are_validated():
+    doc = ad.validate({"format": "atlas.doc", "version": 1, "title": "T", "blocks": [
+        {"id": "p", "type": "image", "src": _PNG, "alt": "dot", "width": 50, "align": "center"}]})
+    assert doc["blocks"][0] == {"id": "p", "type": "image", "src": _PNG, "alt": "dot", "width": 50, "align": "center"}
+    for bad in ("javascript:alert(1)", "data:text/html;base64,PHNjcmlwdD4=", "https://example.com/x.png"):
+        with pytest.raises(ad.DocError):
+            ad.validate({"format": "atlas.doc", "version": 1, "title": "T", "blocks": [{"type": "image", "src": bad}]})
+    assert ad.outline(doc)[0]["text"] == "[picture: dot]"
+    with pytest.raises(ad.DocError):
+        ad.make_block("image")  # the AI can't invent picture data
+
+
+@pytest.mark.skipif(not HAS_LO, reason="LibreOffice not installed")
+def test_docx_export_keeps_colours_and_pictures(tmp_path):
+    doc = ad.validate({"format": "atlas.doc", "version": 1, "title": "T", "blocks": [
+        {"type": "paragraph", "html": 'A <span style="color: #c00000">red</span> and <span style="background-color: #ffff00">marked</span> word'},
+        {"type": "image", "src": _PNG, "alt": "dot", "width": 50}]})
+    docx = LibreOffice(tmp_path / "lo").convert_bytes(ad.to_html(doc).encode(), ".html", "docx", html_input=True)
+    z = zipfile.ZipFile(io.BytesIO(docx))
+    xml = z.read("word/document.xml").decode()
+    assert 'w:color w:val="C00000"' in xml
+    assert "FFFF00" in xml.upper()
+    assert any(n.startswith("word/media/") for n in z.namelist())

@@ -468,3 +468,45 @@ export function display(v: Scalar): string {
 }
 
 export const ERRORS = E;
+
+// ---------------------------------------------------------------- structural edits
+
+const REF_OR_STRING = /"(?:[^"]|"")*"|(\$?)([A-Z]{1,3})(\$?)([1-9]\d*)(?::(\$?)([A-Z]{1,3})(\$?)([1-9]\d*))?(?![A-Za-z0-9_.(])/gi;
+const colNum = (s: string) => { let c = 0; for (const ch of s.toUpperCase()) c = c * 26 + ch.charCodeAt(0) - 64; return c - 1; };
+const colName = (n: number) => { let out = ""; for (let x = n + 1; x > 0; x = Math.floor((x - 1) / 26)) out = String.fromCharCode(65 + ((x - 1) % 26)) + out; return out; };
+
+/**
+ * Adjust references in a formula after rows/columns are inserted (count > 0) or deleted (count < 0) at index `at`.
+ * Single references into a deleted area become #REF!; ranges shrink or move like other spreadsheets.
+ */
+export function shiftFormula(formula: string, axis: "row" | "col", at: number, count: number): string {
+  if (!formula.startsWith("=")) return formula;
+  const del = count < 0 ? -count : 0;
+  const move = (i: number): number | null => {
+    if (count > 0) return i >= at ? i + count : i;
+    if (i < at) return i;
+    if (i < at + del) return null;
+    return i - del;
+  };
+  return "=" + formula.slice(1).replace(REF_OR_STRING, (m, a1, c1, b1, r1, a2, c2, b2, r2) => {
+    if (c1 === undefined) return m; // string literal
+    const p = { c: colNum(c1), r: Number(r1) - 1 };
+    const q = c2 ? { c: colNum(c2), r: Number(r2) - 1 } : null;
+    const get = (x: { c: number; r: number }) => axis === "row" ? x.r : x.c;
+    const set = (x: { c: number; r: number }, v: number) => axis === "row" ? { ...x, r: v } : { ...x, c: v };
+    const name = (x: { c: number; r: number }, d1: string, d2: string) => `${d1}${colName(x.c)}${d2}${x.r + 1}`;
+    if (!q) {
+      const v = move(get(p));
+      return v === null ? "#REF!" : name(set(p, v), a1, b1);
+    }
+    let lo = get(p), hi = get(q);
+    if (count > 0) { lo = move(lo)!; hi = hi >= at ? hi + count : hi; }
+    else {
+      const nlo = lo < at ? lo : lo < at + del ? at : lo - del;
+      const nhi = hi < at ? hi : hi < at + del ? at - 1 : hi - del;
+      if (nhi < nlo) return "#REF!";
+      lo = nlo; hi = nhi;
+    }
+    return `${name(set(p, lo), a1, b1)}:${name(set(q, hi), a2, b2)}`;
+  });
+}

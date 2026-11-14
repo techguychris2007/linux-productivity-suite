@@ -26,6 +26,8 @@ interface Ctx {
   openInWriter: (ref: DocRef | null) => void;
   sheetTarget: DocRef | null;
   openInSheets: (ref: DocRef | null) => void;
+  slideTarget: DocRef | null;
+  openInSlides: (ref: DocRef | null) => void;
   /** Document currently open in an app; sent to Atlas AI as context. */
   activeDoc: (DocRef & { app: string; title?: string }) | null;
   setActiveDoc: (d: (DocRef & { app: string; title?: string }) | null) => void;
@@ -54,6 +56,7 @@ export function AtlasProvider({ bridge, children }: { bridge: AtlasBridge; child
   const [aiDraft, setAiDraft] = useState("");
   const [writerTarget, setWriterTarget] = useState<DocRef | null>(() => load("atlas.writerTarget", null));
   const [sheetTarget, setSheetTarget] = useState<DocRef | null>(() => load("atlas.sheetTarget", null));
+  const [slideTarget, setSlideTarget] = useState<DocRef | null>(() => load("atlas.slideTarget", null));
   const [activeDoc, setActiveDoc] = useState<Ctx["activeDoc"]>(null);
 
   useEffect(() => {
@@ -96,8 +99,10 @@ export function AtlasProvider({ bridge, children }: { bridge: AtlasBridge; child
     openInWriter: (ref) => { setWriterTarget(ref); save("atlas.writerTarget", ref); if (ref) go("writer"); },
     sheetTarget,
     openInSheets: (ref) => { setSheetTarget(ref); save("atlas.sheetTarget", ref); if (ref) go("sheets"); },
+    slideTarget,
+    openInSlides: (ref) => { setSlideTarget(ref); save("atlas.slideTarget", ref); if (ref) go("slides"); },
     activeDoc, setActiveDoc,
-  }), [bridge, route, go, theme, grants, refreshGrants, toasts, notify, dismiss, markAllRead, aiOpen, aiDraft, writerTarget, sheetTarget, activeDoc]);
+  }), [bridge, route, go, theme, grants, refreshGrants, toasts, notify, dismiss, markAllRead, aiOpen, aiDraft, writerTarget, sheetTarget, slideTarget, activeDoc]);
 
   return <AtlasCtx.Provider value={value}>{children}</AtlasCtx.Provider>;
 }

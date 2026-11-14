@@ -11,6 +11,7 @@ import { Settings } from "./views/Settings";
 import { Placeholder } from "./views/Placeholder";
 import { Writer } from "./writer/Writer";
 import { Sheets } from "./sheets/Sheets";
+import { Slides } from "./slides/Slides";
 
 export function App() {
   const { route, go, aiOpen, setAiOpen, toasts, dismiss, markAllRead } = useAtlas();
@@ -38,6 +39,7 @@ export function App() {
   else if (base === "drive") view = <Drive />;
   else if (base === "writer") view = <Writer />;
   else if (base === "sheets") view = <Sheets />;
+  else if (base === "slides") view = <Slides />;
   else if (base === "settings") view = <Settings initial={sub} />;
   else if (base === "ai") view = <Home />;
   else view = <Placeholder app={app} />;
@@ -81,7 +83,7 @@ export function App() {
             <IconButton label="Atlas AI (Ctrl .)" active={aiOpen} onClick={() => setAiOpen(!aiOpen)}><LuSparkles /></IconButton>
           </div>
         </header>
-        <main className={`content ${base === "writer" || base === "sheets" ? "content-flush" : ""}`}>{view}</main>
+        <main className={`content ${base === "writer" || base === "sheets" || base === "slides" ? "content-flush" : ""}`}>{view}</main>
       </div>
 
       {aiOpen && <AiDock />}

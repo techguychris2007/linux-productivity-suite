@@ -6,6 +6,7 @@ import {
   LuSigma, LuEraser, LuClipboardPaste, LuCopy, LuScissors, LuChartColumn, LuChartBar, LuChartLine, LuChartPie, LuTrash2,
   LuArrowDownAZ, LuArrowUpZA, LuInfo, LuDownload, LuGrid3X3, LuPanelTop, LuZoomIn, LuZoomOut, LuSearch, LuPercent,
   LuDollarSign, LuHash, LuCalendar, LuRefreshCw, LuFileSpreadsheet, LuFileDown, LuSquareFunction,
+  LuBetweenHorizontalStart, LuBetweenVerticalStart, LuPaintBucket, LuBaseline, LuRows3, LuColumns3,
 } from "react-icons/lu";
 import type { EngineEvent } from "@atlas/shared-types";
 import { Button, Spinner } from "@atlas/ui";
@@ -13,7 +14,7 @@ import { useAtlas, type DocRef } from "../context";
 import { Ribbon, RBig, RSmall, RStack, RRow, BackstageSection, Zoom, type RibbonTab } from "../ribbon/Ribbon";
 import {
   type AtlasSheet, type CellFormat, type ChartType, type NumFormat, type SheetChart, COLS, ROWS, CHART_TYPES, CURRENCIES,
-  cellName, columnName, evaluateGrid, evaluateTyped, formatValue, isNumeric, normalizeSheet, rangeBounds, rangeName, toCsv,
+  cellName, columnName, evaluateGrid, evaluateTyped, formatValue, isNumeric, normalizeSheet, rangeBounds, rangeName, shiftSheet, toCsv,
 } from "./model";
 import { FUNCTION_NAMES } from "./formula";
 import { ChartView, chartData, CHART_LABELS } from "./charts";
@@ -170,6 +171,24 @@ export function SheetEditor({ docRef, onClose }: { docRef: DocRef; onClose: () =
   const toggle = (k: "b" | "i" | "u") => { const on = !activeFmt[k]; formatRange((f) => ({ ...f, [k]: on })); };
   const setNum = (num: NumFormat) => formatRange((f) => ({ ...f, num: num === "general" ? undefined : num, ...(num === "currency" && !f.cur ? { cur: defaultCurrency() } : {}) }));
   const decimals = (d: number) => formatRange((f) => ({ ...f, num: f.num ?? "number", dp: Math.max(0, Math.min(6, (f.dp ?? (f.num === "percent" ? 0 : 2)) + d)) }));
+
+  const structure = (axis: "row" | "col", insert: boolean) => {
+    const at = axis === "row" ? t : l;
+    const n = axis === "row" ? b - t + 1 : rt - l + 1;
+    const full = axis === "row" ? n === ROWS : n === COLS;
+    if (full && !insert) { notify({ tone: "warning", title: `A sheet needs at least one ${axis === "row" ? "row" : "column"}` }); return; }
+    const res = shiftSheet(latest.current!, axis, at, insert ? n : -n);
+    if (typeof res === "string") { notify({ tone: "warning", title: "Can't insert", body: res }); return; }
+    apply(() => res);
+    const label = axis === "row" ? `${n} row${n === 1 ? "" : "s"}` : `${n} column${n === 1 ? "" : "s"}`;
+    notify({ tone: "info", title: `${insert ? "Inserted" : "Deleted"} ${label}`, body: "Formula references were updated." });
+  };
+  const colourInput = (key: "color" | "fill", label: string, icon: React.ReactNode, fallback: string) => (
+    <label className="rb-small rb-colour" title={label}>
+      {icon}<span className="rb-colour-bar" style={{ background: activeFmt[key] ?? fallback }} />
+      <input type="color" aria-label={label} value={activeFmt[key] ?? (key === "fill" ? "#ffff00" : "#c00000")} onChange={(e) => formatRange((f) => ({ ...f, [key]: e.target.value }))} />
+    </label>
+  );
 
   const autoSum = (fn = "SUM") => {
     if (!sheet) return;
@@ -397,6 +416,9 @@ export function SheetEditor({ docRef, onClose }: { docRef: DocRef; onClose: () =
         <RSmall icon={<LuBold />} label="Bold (Ctrl B)" active={!!activeFmt.b} onClick={() => toggle("b")} />
         <RSmall icon={<LuItalic />} label="Italic (Ctrl I)" active={!!activeFmt.i} onClick={() => toggle("i")} />
         <RSmall icon={<LuUnderline />} label="Underline (Ctrl U)" active={!!activeFmt.u} onClick={() => toggle("u")} />
+        {colourInput("color", "Font colour", <LuBaseline />, "transparent")}
+        {colourInput("fill", "Fill colour", <LuPaintBucket />, "transparent")}
+        <RSmall icon={<LuEraser />} label="Remove colours" onClick={() => formatRange((f) => ({ ...f, color: undefined, fill: undefined }))} />
       </RRow> },
       { label: "Alignment", content: <RRow>
         <RSmall icon={<LuAlignLeft />} label="Align left" active={activeFmt.align === "left"} onClick={() => formatRange((f) => ({ ...f, align: f.align === "left" ? undefined : "left" }))} />
@@ -418,6 +440,10 @@ export function SheetEditor({ docRef, onClose }: { docRef: DocRef; onClose: () =
           <button className="rb-small" title="Increase decimals" aria-label="Increase decimals" onClick={() => decimals(1)}>.0→.00</button>
           <button className="rb-small" title="Decrease decimals" aria-label="Decrease decimals" onClick={() => decimals(-1)}>.00→.0</button>
         </RRow>
+      </RStack> },
+      { label: "Cells", content: <RStack>
+        <RRow><RSmall icon={<LuBetweenHorizontalStart />} label="Insert rows above" showLabel onClick={() => structure("row", true)} /><RSmall icon={<LuBetweenVerticalStart />} label="Insert columns left" showLabel onClick={() => structure("col", true)} /></RRow>
+        <RRow><RSmall icon={<LuRows3 />} label="Delete rows" showLabel onClick={() => structure("row", false)} /><RSmall icon={<LuColumns3 />} label="Delete columns" showLabel onClick={() => structure("col", false)} /></RRow>
       </RStack> },
       { label: "Editing", content: <>
         <RBig icon={<LuSigma />} label="AutoSum" onClick={() => autoSum()} title="AutoSum (Alt =)" />
@@ -491,7 +517,7 @@ export function SheetEditor({ docRef, onClose }: { docRef: DocRef; onClose: () =
           </BackstageSection> },
           { id: "export", label: "Export", icon: <LuDownload />, content: <BackstageSection title="Export">
             <div className="rb-bs-tiles">
-              <button className="rb-bs-tile" disabled={!!exporting} onClick={() => exportFile("xlsx")}>{exporting ? <Spinner size={20} /> : <LuFileSpreadsheet />}<strong>Excel workbook</strong><span>.xlsx, saved next to this file in {grantLabel}. Formulas are kept; formatting and charts are not yet.</span></button>
+              <button className="rb-bs-tile" disabled={!!exporting} onClick={() => exportFile("xlsx")}>{exporting ? <Spinner size={20} /> : <LuFileSpreadsheet />}<strong>Excel workbook</strong><span>.xlsx, saved next to this file in {grantLabel}. Keeps formulas, formatting and charts.</span></button>
               <button className="rb-bs-tile" onClick={() => exportFile("csv")}><LuFileDown /><strong>CSV</strong><span>.csv download of the calculated values</span></button>
             </div>
           </BackstageSection> },
@@ -536,7 +562,7 @@ export function SheetEditor({ docRef, onClose }: { docRef: DocRef; onClose: () =
                   return (
                     <td key={c} role="gridcell" aria-selected={inSel}
                       className={`${inSel && !isActive ? "is-sel" : ""} ${isActive ? "is-active" : ""} ${raw.startsWith("#") || values[r][c].startsWith("#") && raw.startsWith("=") ? "is-error" : ""}`}
-                      style={{ textAlign: align, fontWeight: f?.b ? 700 : undefined, fontStyle: f?.i ? "italic" : undefined, textDecoration: f?.u ? "underline" : undefined }}
+                      style={{ textAlign: align, fontWeight: f?.b ? 700 : undefined, fontStyle: f?.i ? "italic" : undefined, textDecoration: f?.u ? "underline" : undefined, color: f?.color, background: f?.fill }}
                       onMouseDown={(e) => onCellDown(e, r, c)} onMouseEnter={() => { if (dragging.current && !edit) setSel((s) => ({ ...s, r2: r, c2: c })); }}
                       onDoubleClick={() => startEdit(raw)} title={raw.startsWith("=") ? raw : undefined}>
                       {editingHere(r, c)

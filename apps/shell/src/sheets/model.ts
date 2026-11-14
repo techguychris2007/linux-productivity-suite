@@ -1,8 +1,8 @@
-import { display, ERRORS, evaluate, literal, serialToDate } from "./formula";
+import { display, ERRORS, evaluate, literal, serialToDate, shiftFormula } from "./formula";
 export type Grid = string[][];
 export type NumFormat = "general" | "number" | "currency" | "percent" | "date";
 export type CellAlign = "left" | "center" | "right";
-export interface CellFormat { b?: boolean; i?: boolean; u?: boolean; align?: CellAlign; num?: NumFormat; cur?: string; dp?: number }
+export interface CellFormat { b?: boolean; i?: boolean; u?: boolean; align?: CellAlign; num?: NumFormat; cur?: string; dp?: number; color?: string; fill?: string }
 export type ChartType = "column" | "bar" | "line" | "pie";
 /** A chart drawn from a range; position and size are in grid pixels at 100% zoom. */
 export interface SheetChart { id: string; type: ChartType; range: string; title: string; x: number; y: number; w: number; h: number }
@@ -58,6 +58,8 @@ export function cleanFormat(f: any): CellFormat {
   if (["number", "currency", "percent", "date"].includes(f.num)) out.num = f.num;
   if (typeof f.cur === "string" && /^[A-Z]{3}$/.test(f.cur)) out.cur = f.cur;
   if (Number.isInteger(f.dp) && f.dp >= 0 && f.dp <= 6) out.dp = f.dp;
+  if (typeof f.color === "string" && /^#[0-9a-f]{6}$/i.test(f.color)) out.color = f.color.toLowerCase();
+  if (typeof f.fill === "string" && /^#[0-9a-f]{6}$/i.test(f.fill)) out.fill = f.fill.toLowerCase();
   return out;
 }
 
@@ -139,4 +141,38 @@ export function toCsv(grid: Grid): string {
     return row.slice(0, last + 1).map(quote).join(",");
   });
   return rows.join("\r\n") + (rows.length ? "\r\n" : "");
+}
+
+/**
+ * Insert (count > 0) or delete (count < 0) rows/columns at index `at`, moving cells, formats and charts and
+ * adjusting formula references. Returns an error message instead when inserting would push data off the grid.
+ */
+export function shiftSheet(sheet: AtlasSheet, axis: "row" | "col", at: number, count: number): AtlasSheet | string {
+  const size = axis === "row" ? ROWS : COLS;
+  if (count > 0) {
+    const lost = axis === "row" ? sheet.cells.slice(size - count).some((r) => r.some((v) => v !== "")) : sheet.cells.some((r) => r.slice(size - count).some((v) => v !== ""));
+    if (lost) return `There's data in the last ${count === 1 ? "" : count + " "}${axis === "row" ? "row" : "column"}${count === 1 ? "" : "s"} of the sheet, so nothing can be inserted. Clear it first.`;
+  }
+  const src = (i: number): number | null => count > 0 ? (i < at ? i : i < at + count ? null : i - count) : (i < at ? i : i - count < size ? i - count : null);
+  const cells = emptyGrid();
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const sr = axis === "row" ? src(r) : r, sc = axis === "col" ? src(c) : c;
+    if (sr === null || sc === null) continue;
+    cells[r][c] = shiftFormula(sheet.cells[sr][sc], axis, at, count);
+  }
+  const formats: Record<string, CellFormat> = {};
+  for (const [key, f] of Object.entries(sheet.formats ?? {})) {
+    const ix = cellIndex(key); if (!ix) continue;
+    let [r, c] = ix;
+    const v = axis === "row" ? r : c;
+    const nv = count > 0 ? (v >= at ? v + count : v) : (v < at ? v : v < at - count ? -1 : v + count);
+    if (nv < 0 || nv >= size) continue;
+    if (axis === "row") r = nv; else c = nv;
+    formats[cellName(r, c)] = f;
+  }
+  const charts = (sheet.charts ?? []).flatMap((ch) => {
+    const moved = shiftFormula("=" + ch.range, axis, at, count).slice(1);
+    return moved.includes("#REF!") ? [] : [{ ...ch, range: moved }];
+  });
+  return { ...sheet, cells, formats, charts };
 }
