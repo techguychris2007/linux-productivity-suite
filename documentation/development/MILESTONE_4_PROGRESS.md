@@ -14,6 +14,7 @@ Feature research and the full gap list: [OFFICE_FEATURE_INVENTORY.md](../researc
 - Home (undo, font incl. sub/superscript and clear formatting, paragraph incl. justify, styles gallery, Find/Replace), Insert, Layout (A4/Letter), View (zoom, Atlas AI).
 - Find & Replace (Ctrl F / Ctrl H) with match count, match case, Replace and Replace all (formatting kept).
 - Font colour and highlight (stored as `<span style="color: #rrggbb">` / `background-color`, checked the same way in the shell and engine; kept on DOCX import and export).
+- Font family and size (safe font allow-list and 8–72 pt controls; kept on save, DOCX import and export).
 - Pictures (Insert → Picture): PNG, JPEG, GIF or WebP, scaled to at most 1600 px and stored in the document (limit about 3 MB each); a contextual Picture tab sets size (25–100%), position and alt text. Pictures are exported into DOCX/PDF/ODT.
 - Word and character counts in the status bar; export to DOCX/PDF/ODT from File → Export.
 
@@ -38,7 +39,7 @@ Feature research and the full gap list: [OFFICE_FEATURE_INVENTORY.md](../researc
 - XLSX: read more than the first worksheet; fills, borders and fonts beyond bold/italic/underline; chart styling beyond series colours. ODS export.
 - Multiple worksheets; column widths; fill handle; merge cells; borders.
 - Conditional formatting, data validation, filters, comments; dynamic-array functions.
-- Writer tier 2: font family and size, headers/footers, comments, table of contents.
+- Writer tier 2 remaining: headers/footers, comments, table of contents.
 - Additional Sheets and Writer features listed above remain future work. Slides is tracked separately in [the Milestone 5 report](MILESTONE_5_REPORT.md).
 
 ## Fixes

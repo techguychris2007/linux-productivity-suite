@@ -21,6 +21,7 @@ ALIGNS = ("left", "center", "right", "justify")
 INLINE_TAGS = {"b", "strong", "i", "em", "u", "s", "code", "sub", "sup", "br", "a", "span", "font"}
 IMAGE_RE = re.compile(r"^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$")
 MAX_IMAGE_CHARS = 4_000_000  # ~3 MB of image data per picture
+FONT_FAMILIES = ("Arial", "Calibri", "Cambria", "Georgia", "Inter", "Liberation Sans", "Liberation Serif", "Noto Sans", "Times New Roman", "Ubuntu")
 
 
 def _hex_colour(value: str | None) -> str | None:
@@ -36,11 +37,27 @@ def _hex_colour(value: str | None) -> str | None:
     return None
 
 
+def _safe_font_family(value: str | None) -> str | None:
+    first = (value or "").split(",", 1)[0].strip().strip("\"'")
+    return next((family for family in FONT_FAMILIES if family.lower() == first.lower()), None)
+
+
+def _safe_font_size(value: str | None) -> str | None:
+    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(pt|px)\s*", value or "", re.I)
+    if not m:
+        return None
+    pt = float(m.group(1)) * (0.75 if m.group(2).lower() == "px" else 1)
+    return f"{round(pt * 4) / 4:g}pt" if 6 <= pt <= 96 else None
+
+
 def _span_style(tag: str, attrs: dict) -> str | None:
-    """Canonical style for a colour/highlight span, or None to drop the tag (its text is kept)."""
-    color = bg = None
+    """Canonical safe inline styles, or None to drop the span while keeping its text."""
+    color = bg = family = size = None
     if tag == "font":
         color = _hex_colour(attrs.get("color"))
+        family = _safe_font_family(attrs.get("face"))
+        legacy_size = {"1": "8pt", "2": "10pt", "3": "12pt", "4": "14pt", "5": "18pt", "6": "24pt", "7": "36pt"}
+        size = legacy_size.get((attrs.get("size") or "").strip())
     for decl in (attrs.get("style") or "").split(";"):
         if ":" not in decl:
             continue
@@ -49,7 +66,12 @@ def _span_style(tag: str, attrs: dict) -> str | None:
             color = _hex_colour(v) or color
         elif k in ("background-color", "background"):
             bg = _hex_colour(v) or bg
-    parts = ([f"color: {color}"] if color else []) + ([f"background-color: {bg}"] if bg else [])
+        elif k == "font-family":
+            family = _safe_font_family(v) or family
+        elif k == "font-size":
+            size = _safe_font_size(v) or size
+    parts = ([f"font-family: {family}"] if family else []) + ([f"font-size: {size}"] if size else []) + \
+            ([f"color: {color}"] if color else []) + ([f"background-color: {bg}"] if bg else [])
     return "; ".join(parts) or None
 _TAG_NORMAL = {"strong": "b", "em": "i", "strike": "s", "del": "s"}
 
@@ -340,7 +362,7 @@ def _inner_html(n: _Node) -> str:
             out.append(f"<{c.tag}>")
         else:
             attrs = "".join(f' {k}="{htmllib.escape(v or "", quote=True)}"' for k, v in c.attrs.items()
-                            if k == "href" or (k in ("style", "color") and c.tag in ("span", "font")))
+                            if k == "href" or (k in ("style", "color", "face", "size") and c.tag in ("span", "font")))
             out.append(f"<{c.tag}{attrs}>{_inner_html(c)}</{c.tag}>")
     return "".join(out)
 

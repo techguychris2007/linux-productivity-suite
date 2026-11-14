@@ -49,7 +49,7 @@ Tier: **1** = this milestone, **2** = next, **3** = later.
 
 | Tab | Office features | Atlas | Tier |
 |---|---|---|---|
-| Home | clipboard, font family/size/colour/highlight, B/I/U/S, sub/superscript, clear formatting, lists, indent, alignment incl. justify, line spacing, styles gallery, find/replace | 🟡 ribbon, sub/sup, clear, justify, styles gallery, find/replace, font colour and highlight ✅; font family/size, indent/spacing 2 | 1–2 |
+| Home | clipboard, font family/size/colour/highlight, B/I/U/S, sub/superscript, clear formatting, lists, indent, alignment incl. justify, line spacing, styles gallery, find/replace | 🟡 ribbon, font family/size/colour/highlight, sub/sup, clear, justify, styles gallery and find/replace ✅; indent/spacing 2 | 1–2 |
 | Insert | tables, pictures, shapes, links, page break, header/footer, page numbers, symbols, equations, text box, comments | 🟡 tables, links, page breaks, pictures (size, position, alt text) ✅; header/footer 2 | 2 |
 | Design | themes, colour schemes, watermark, page colour/borders | ⬜ | 3 |
 | Layout | margins, orientation, size, columns, breaks, indent/spacing | 🟡 size (A4/Letter); margins/orientation 2 | 2 |

@@ -8,6 +8,7 @@ export interface Block { id: string; type: BlockType; html?: string; rows?: stri
 export interface AtlasDoc { format: "atlas.doc"; version: 1; title: string; page: { size: "A4" | "Letter" }; blocks: Block[] }
 
 export const TEXT_TYPES: TextType[] = ["title", "heading1", "heading2", "heading3", "paragraph", "quote", "bullet", "numbered"];
+export const FONT_FAMILIES = ["Arial", "Calibri", "Cambria", "Georgia", "Inter", "Liberation Sans", "Liberation Serif", "Noto Sans", "Times New Roman", "Ubuntu"] as const;
 export const STYLE_LABELS: Record<TextType, string> = {
   title: "Title", heading1: "Heading 1", heading2: "Heading 2", heading3: "Heading 3", paragraph: "Normal text",
   quote: "Quote", bullet: "Bulleted list", numbered: "Numbered list",
@@ -37,6 +38,18 @@ export function hexColour(value: string | null | undefined): string | null {
   return null;
 }
 
+const safeFontFamily = (value: string | null | undefined): string | null => {
+  const first = (value ?? "").split(",", 1)[0].trim().replace(/^(['"])(.*)\1$/, "$2");
+  return FONT_FAMILIES.find((family) => family.toLowerCase() === first.toLowerCase()) ?? null;
+};
+
+const safeFontSize = (value: string | null | undefined): string | null => {
+  const m = /^\s*(\d+(?:\.\d+)?)\s*(pt|px)\s*$/i.exec(value ?? "");
+  if (!m) return null;
+  const pt = Number(m[1]) * (m[2].toLowerCase() === "px" ? 0.75 : 1);
+  return pt >= 6 && pt <= 96 ? `${Math.round(pt * 4) / 4}pt` : null;
+};
+
 /** Keep only the inline subset Atlas documents allow (same rules as the engine). */
 export function sanitize(html: string): string {
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
@@ -55,7 +68,9 @@ export function sanitize(html: string): string {
         // Colour and highlight, in the same canonical form the engine writes.
         const color = hexColour(st?.color) ?? (tag === "FONT" ? hexColour(el.getAttribute("color")) : null);
         const bg = hexColour(st?.backgroundColor);
-        const css = [color && `color: ${color}`, bg && `background-color: ${bg}`].filter(Boolean).join("; ");
+        const family = safeFontFamily(st?.fontFamily) ?? (tag === "FONT" ? safeFontFamily(el.getAttribute("face")) : null);
+        const size = safeFontSize(st?.fontSize);
+        const css = [family && `font-family: ${family}`, size && `font-size: ${size}`, color && `color: ${color}`, bg && `background-color: ${bg}`].filter(Boolean).join("; ");
         if (css && inner) inner = `<span style="${css}">${inner}</span>`;
         if (st?.fontWeight === "bold" || Number(st?.fontWeight) >= 600) inner = `<b>${inner}</b>`;
         if (st?.fontStyle === "italic") inner = `<i>${inner}</i>`;

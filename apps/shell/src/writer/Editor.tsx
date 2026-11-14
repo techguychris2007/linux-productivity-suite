@@ -8,7 +8,7 @@ import { Ribbon, RBig, RSmall, RStack, RRow, BackstageSection, Zoom, type Ribbon
 import type { EngineEvent } from "@atlas/shared-types";
 import { Button, IconButton, Spinner } from "@atlas/ui";
 import { useAtlas, type DocRef } from "../context";
-import { type AtlasDoc, type Block, type TextType, type Align, STYLE_LABELS, TEXT_TYPES, block, isText, sanitize, wordCount, plainText, newId } from "./model";
+import { type AtlasDoc, type Block, type TextType, type Align, STYLE_LABELS, TEXT_TYPES, FONT_FAMILIES, block, isText, sanitize, wordCount, plainText, newId } from "./model";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 type Caret = { id: string; at: "start" | "end" } | null;
@@ -25,6 +25,8 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   const [exporting, setExporting] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [zoom, setZoom] = useState(100);
+  const [fontFamily, setFontFamily] = useState<string>("Arial");
+  const [fontSize, setFontSize] = useState("12pt");
   const [findOpen, setFindOpen] = useState<null | "find" | "replace">(null);
   const [ribbonTab, setRibbonTab] = useState("home");
   const pictureInput = useRef<HTMLInputElement>(null);
@@ -270,6 +272,27 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
     document.execCommand(cmd, false, value);
     document.execCommand("styleWithCSS", false, "false");
   };
+  const applyInlineStyle = (property: "font-family" | "font-size", value: string) => {
+    const range = savedRange.current;
+    const selection = window.getSelection();
+    const editable = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[contenteditable=true]");
+    const host = range && editable(range.commonAncestorContainer);
+    if (!range || range.collapsed || !selection || !host || editable(range.startContainer) !== host || editable(range.endContainer) !== host) {
+      notify({ tone: "info", title: "Select text to change its font" });
+      return;
+    }
+    host.focus({ preventScroll: true });
+    selection.removeAllRanges(); selection.addRange(range);
+    const span = document.createElement("span");
+    span.style.setProperty(property, value);
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+    const next = document.createRange(); next.selectNodeContents(span);
+    selection.removeAllRanges(); selection.addRange(next);
+    savedRange.current = next.cloneRange();
+    const blockId = host.dataset.blockId;
+    if (blockId) setBlock(blockId, { html: sanitize(host.innerHTML) }, true);
+  };
   const colourPicker = (cmd: "foreColor" | "hiliteColor", label: string, icon: React.ReactNode, initial: string) => (
     <label className="rb-small rb-colour" title={label} onMouseDown={keepSelection}>
       {icon}<span className="rb-colour-bar" style={{ background: initial }} />
@@ -293,6 +316,16 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
     { id: "home", label: "Home", groups: [
       { label: "Undo", content: <RStack><RSmall icon={<LuUndo2 />} label="Undo (Ctrl Z)" onClick={undo} disabled={!past.current.length} /><RSmall icon={<LuRedo2 />} label="Redo (Ctrl Shift Z)" onClick={redo} disabled={!future.current.length} /></RStack> },
       { label: "Font", content: <RStack>
+        <RRow>
+          <select className="rb-select" aria-label="Font family" value={fontFamily} onMouseDown={keepSelection} onFocus={keepSelection}
+            onChange={(e) => { const family = e.target.value; setFontFamily(family); applyInlineStyle("font-family", family); }}>
+            {FONT_FAMILIES.map((family) => <option key={family} value={family}>{family}</option>)}
+          </select>
+          <select className="rb-select" aria-label="Font size" value={fontSize} onMouseDown={keepSelection} onFocus={keepSelection}
+            onChange={(e) => { const size = e.target.value; setFontSize(size); applyInlineStyle("font-size", size); }}>
+            {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72].map((size) => <option key={size} value={`${size}pt`}>{size}</option>)}
+          </select>
+        </RRow>
         <RRow>
           <RSmall icon={<LuBold />} label="Bold (Ctrl B)" onClick={() => exec("bold")} />
           <RSmall icon={<LuItalic />} label="Italic (Ctrl I)" onClick={() => exec("italic")} />
@@ -508,7 +541,7 @@ function TextBlock({ b, number, cls, caret, onCaretDone, onFocus, onChange, onSp
   const Tag = (b.type === "title" ? "h1" : b.type === "heading1" ? "h2" : b.type === "heading2" ? "h3" : b.type === "heading3" ? "h4" : "div") as any;
   const placeholder = b.type === "title" ? "Title" : b.type.startsWith("heading") ? "Heading" : b.type === "paragraph" ? "Type here, or ask Atlas AI to write it…" : "";
   return (
-    <Tag ref={ref} className={`wb wb-${b.type} ${cls}`} data-number={b.type === "numbered" ? `${number}.` : undefined}
+    <Tag ref={ref} className={`wb wb-${b.type} ${cls}`} data-block-id={b.id} data-number={b.type === "numbered" ? `${number}.` : undefined}
       style={b.align ? { textAlign: b.align } : undefined} contentEditable suppressContentEditableWarning spellCheck
       role="textbox" aria-multiline="true" aria-label={STYLE_LABELS[b.type as TextType]} data-placeholder={placeholder}
       onFocus={onFocus} onKeyDown={onKeyDown}
