@@ -146,7 +146,7 @@ def register(reg: ToolRegistry, svc: WriterService) -> None:
               "read", "writer")
     def read(args, ctx):
         doc = svc.load(args["grant"], args["path"])
-        return ToolResult({"title": doc["title"], "page": doc["page"], "blocks": ad.outline(doc), **ad.stats(doc)}, untrusted=True,
+        return ToolResult({"title": doc["title"], "page": doc["page"], "blocks": ad.outline(doc), "comments": doc.get("comments", []), **ad.stats(doc)}, untrusted=True,
                           source=f"document {args['path']}", summary=f"Read {args['path']} ({len(doc['blocks'])} blocks)")
 
     @reg.tool("writer.update_page", "Update a document's page size, repeating header text, or repeating footer text.",

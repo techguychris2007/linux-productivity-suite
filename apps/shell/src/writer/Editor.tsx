@@ -8,7 +8,7 @@ import { Ribbon, RBig, RSmall, RStack, RRow, BackstageSection, Zoom, type Ribbon
 import type { EngineEvent } from "@atlas/shared-types";
 import { Button, IconButton, Spinner } from "@atlas/ui";
 import { useAtlas, type DocRef } from "../context";
-import { type AtlasDoc, type Block, type TextType, type Align, STYLE_LABELS, TEXT_TYPES, FONT_FAMILIES, block, isText, sanitize, wordCount, plainText, newId } from "./model";
+import { type AtlasDoc, type Block, type DocComment, type TextType, type Align, STYLE_LABELS, TEXT_TYPES, FONT_FAMILIES, block, isText, sanitize, wordCount, plainText, newId } from "./model";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 type Caret = { id: string; at: "start" | "end" } | null;
@@ -27,6 +27,9 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   const [zoom, setZoom] = useState(100);
   const [fontFamily, setFontFamily] = useState<string>("Arial");
   const [fontSize, setFontSize] = useState("12pt");
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState<{ blockId: string; quote: string } | null>(null);
+  const [commentText, setCommentText] = useState("");
   const [findOpen, setFindOpen] = useState<null | "find" | "replace">(null);
   const [ribbonTab, setRibbonTab] = useState("home");
   const pictureInput = useRef<HTMLInputElement>(null);
@@ -140,7 +143,7 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
     const i = idx(id);
     update((d) => {
       const blocks = d.blocks.filter((b) => b.id !== id);
-      return { ...d, blocks: blocks.length ? blocks : [block("paragraph")] };
+      return { ...d, blocks: blocks.length ? blocks : [block("paragraph")], comments: (d.comments ?? []).filter((c) => c.blockId !== id) };
     }, { snapshot: true });
     if (focusPrev && doc) {
       const prev = [...doc.blocks.slice(0, Math.max(i, 0))].reverse().find((b) => isText(b.type));
@@ -170,7 +173,8 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
     const prev = doc.blocks[i - 1];
     if (!prev) return;
     if (!isText(prev.type)) { if (!plainText(html).trim()) remove(b.id); return; }
-    update((d) => ({ ...d, blocks: d.blocks.filter((x) => x.id !== b.id).map((x) => (x.id === prev.id ? { ...x, html: (x.html ?? "") + html } : x)) }), { snapshot: true });
+    update((d) => ({ ...d, blocks: d.blocks.filter((x) => x.id !== b.id).map((x) => (x.id === prev.id ? { ...x, html: (x.html ?? "") + html } : x)),
+      comments: (d.comments ?? []).map((c) => c.blockId === b.id ? { ...c, blockId: prev.id } : c) }), { snapshot: true });
     setCaret({ id: prev.id, at: "end" }); setFocusId(prev.id);
   };
 
@@ -179,6 +183,28 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
   const setAlign = (a: Align) => { if (focused && isText(focused.type)) setBlock(focused.id, { align: a === "left" ? undefined : a }, true); };
   const setPageText = (field: "header" | "footer", value: string) =>
     update((d) => ({ ...d, page: { ...d.page, [field]: value.slice(0, 300) } }));
+  const beginComment = () => {
+    const range = savedRange.current;
+    const node = range?.commonAncestorContainer;
+    const blockEl = node && (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-block-id]");
+    const blockId = blockEl?.dataset.blockId ?? (focused && isText(focused.type) ? focused.id : "");
+    if (!blockId || !doc?.blocks.some((b) => b.id === blockId && isText(b.type))) {
+      notify({ tone: "info", title: "Place the cursor in a text paragraph to add a comment" });
+      return;
+    }
+    const quote = range && !range.collapsed ? range.toString().slice(0, 500) : "";
+    setCommentDraft({ blockId, quote }); setCommentText(""); setCommentsOpen(true);
+  };
+  const addComment = () => {
+    if (!commentDraft || !commentText.trim()) return;
+    const item: DocComment = { id: newId(), blockId: commentDraft.blockId, text: commentText.trim().slice(0, 3000), quote: commentDraft.quote || undefined };
+    update((d) => ({ ...d, comments: [...(d.comments ?? []), item] }), { snapshot: true });
+    setCommentDraft(null); setCommentText("");
+  };
+  const setCommentResolved = (id: string, resolved: boolean) =>
+    update((d) => ({ ...d, comments: (d.comments ?? []).map((c) => c.id === id ? { ...c, resolved } : c) }), { snapshot: true });
+  const deleteComment = (id: string) =>
+    update((d) => ({ ...d, comments: (d.comments ?? []).filter((c) => c.id !== id) }), { snapshot: true });
   const exec = (cmd: string, value?: string) => { document.execCommand(cmd, false, value); };
   const insertBlock = (nb: Block) => insertAfter(focusId ?? doc?.blocks[doc.blocks.length - 1]?.id ?? null, nb);
 
@@ -398,6 +424,14 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
           onChange={(e) => setPageText("footer", e.target.value)} /></label></RRow>
       </RStack> },
     ] },
+    { id: "review", label: "Review", groups: [
+      { label: "Comments", content: <RStack>
+        <div onMouseDown={() => { const selection = window.getSelection(); if (selection?.rangeCount) savedRange.current = selection.getRangeAt(0).cloneRange(); }}>
+          <RBig icon={<LuQuote />} label="New comment" onClick={beginComment} title="Comment on the selected text or current paragraph" />
+        </div>
+        <RBig icon={<LuQuote />} label={`Comments (${doc.comments?.length ?? 0})`} active={commentsOpen} onClick={() => setCommentsOpen((open) => !open)} />
+      </RStack> },
+    ] },
     { id: "view", label: "View", groups: [
       { label: "Zoom", content: <>
         <RBig icon={<LuZoomOut />} label="Zoom out" onClick={() => setZoom((z) => Math.max(50, z - 10))} />
@@ -458,7 +492,7 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
         </div>
       )}
 
-      <div className="w-canvas" onMouseDown={(e) => {
+      <div className={`w-canvas ${commentsOpen ? "w-canvas-comments" : ""}`} onMouseDown={(e) => {
         if (e.target === e.currentTarget && doc.blocks.length) { const last = doc.blocks[doc.blocks.length - 1]; if (isText(last.type)) { setCaret({ id: last.id, at: "end" }); setFocusId(last.id); e.preventDefault(); } else insertAfter(last.id, block("paragraph")); }
       }}>
         <article className={`w-page w-page-${doc.page.size}`} aria-label={doc.title} style={{ zoom: zoom / 100 }}>
@@ -496,6 +530,31 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
           })}
           {doc.page.footer && <div className="w-page-margin w-page-footer" aria-label="Page footer preview">{doc.page.footer}</div>}
         </article>
+        {commentsOpen && <aside className="w-comments" aria-label="Document comments">
+          <header className="w-comments-header"><strong>Comments</strong><span>{doc.comments?.length ?? 0}</span>
+            <IconButton label="Close comments" onClick={() => setCommentsOpen(false)}><LuX /></IconButton></header>
+          {commentDraft && <form className="w-comment-compose" onSubmit={(e) => { e.preventDefault(); addComment(); }}>
+            {commentDraft.quote && <blockquote>{commentDraft.quote}</blockquote>}
+            <textarea autoFocus aria-label="Comment text" maxLength={3000} placeholder="Write a comment" value={commentText} onChange={(e) => setCommentText(e.target.value)} />
+            <div className="row gap-2"><Button size="sm" variant="primary" type="submit" disabled={!commentText.trim()}>Add comment</Button>
+              <Button size="sm" variant="ghost" type="button" onClick={() => setCommentDraft(null)}>Cancel</Button></div>
+          </form>}
+          <div className="w-comments-list">
+            {(doc.comments ?? []).map((comment) => {
+              const target = doc.blocks.find((item) => item.id === comment.blockId);
+              return <article key={comment.id} className={`w-comment ${comment.resolved ? "is-resolved" : ""}`}>
+                <button className="w-comment-target" type="button" onClick={() => { document.getElementById(`writer-${comment.blockId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }); setFocusId(comment.blockId); }}>
+                  {target && isText(target.type) ? STYLE_LABELS[target.type] : "Document text"} · Go to text
+                </button>
+                {comment.quote && <blockquote>{comment.quote}</blockquote>}
+                <p>{comment.text}</p>
+                <div className="row between gap-2"><Button size="sm" variant="ghost" onClick={() => setCommentResolved(comment.id, !comment.resolved)}>{comment.resolved ? "Reopen" : "Resolve"}</Button>
+                  <IconButton label="Delete comment" onClick={() => deleteComment(comment.id)}><LuTrash2 /></IconButton></div>
+              </article>;
+            })}
+            {!commentDraft && !doc.comments?.length && <p className="muted">No comments yet. Select text and choose New comment.</p>}
+          </div>
+        </aside>}
       </div>
 
       <footer className="doc-statusbar">

@@ -251,6 +251,20 @@ p { margin: 0; }
 .w-page-margin { color: #656565; font: 12px/1.4 var(--font-ui); overflow-wrap: anywhere; }
 .w-page-header { margin: -38px 0 30px; padding-bottom: 8px; border-bottom: 1px solid #dedede; }
 .w-page-footer { margin-top: 48px; padding-top: 8px; border-top: 1px solid #dedede; }
+.w-canvas-comments { display: flex; align-items: flex-start; gap: 18px; }
+.w-canvas-comments .w-page { flex: none; margin-left: auto; margin-right: 0; }
+.w-comments { position: sticky; top: 0; flex: 0 0 290px; max-height: calc(100vh - 170px); overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text); font-family: var(--font-ui); font-size: var(--text-sm); }
+.w-comments-header { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.w-comments-header span { color: var(--text-2); }
+.w-comments-header .icon-btn { margin-left: auto; }
+.w-comment-compose { display: grid; gap: 8px; margin: 10px 0; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.w-comment-compose textarea { min-height: 86px; resize: vertical; }
+.w-comments-list { display: grid; gap: 10px; padding-top: 10px; }
+.w-comment { padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.w-comment.is-resolved { opacity: .68; }
+.w-comment-target { color: var(--accent); font-size: var(--text-xs); text-align: left; text-decoration: underline; }
+.w-comment blockquote { margin: 8px 0; padding-left: 8px; border-left: 2px solid var(--accent); color: var(--text-2); }
+.w-comment p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .w-toc { margin: 0 0 24px; padding: 16px 20px; border: 1px solid #d9d5ce; border-radius: 4px; background: #faf9f7; font-family: var(--font-ui); font-size: 14px; }
 .w-toc.is-focused { outline: 2px solid var(--accent); outline-offset: 2px; }
 .w-toc-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 17px; }

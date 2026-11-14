@@ -4,13 +4,13 @@ The CI workflow builds the Debian package and AppImage on Ubuntu 24.04. Branch p
 
 ## Cut a release
 
-1. Set `version` in `apps/shell/src-tauri/tauri.conf.json` to the release version, for example `0.1.7`.
+1. Set `version` in `apps/shell/src-tauri/tauri.conf.json` to the release version, for example `0.1.8`.
 2. Commit and push that version change to `main`.
 3. Create and push the matching tag, with a `v` prefix:
 
    ```bash
-   git tag v0.1.7
-   git push origin v0.1.7
+   git tag v0.1.8
+   git push origin v0.1.8
    ```
 
 4. Wait for the `CI` workflow to pass. It checks that the tag version matches the app version and creates a draft release with both Linux packages and checksums.

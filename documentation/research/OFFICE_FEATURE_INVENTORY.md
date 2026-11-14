@@ -55,7 +55,7 @@ Tier: **1** = this milestone, **2** = next, **3** = later.
 | Layout | margins, orientation, size, columns, breaks, indent/spacing | 🟡 size (A4/Letter); margins/orientation 2 | 2 |
 | References | table of contents, footnotes/endnotes, citations, captions, index | 🟡 linked TOC generated from Heading 1–3; footnotes/endnotes and citations 2–3 | 2–3 |
 | Mailings | mail merge, envelopes, labels | ⬜ (could merge from a Sheets file) | 3 |
-| Review | spelling & grammar, word count, read aloud, comments, track changes, compare, protect | 🟡 word count; spelling via system spell-check; comments/track changes 2 | 2 |
+| Review | spelling & grammar, word count, read aloud, comments, track changes, compare, protect | 🟡 word count; block comments with quoted text ✅ inside Atlas; spelling via system spell-check; comment import/export and track changes 2 | 2 |
 | View | read mode, print layout, ruler, navigation pane, zoom, focus mode | 🟡 zoom; navigation pane 2 | 2 |
 | Files | DOCX/ODT/PDF export, DOCX/ODT/RTF/HTML import, print | ✅ | — |
 
