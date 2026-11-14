@@ -374,6 +374,8 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
         <input ref={pictureInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="visually-hidden" onChange={(e) => insertPicture(e.target.files?.[0])} /></> },
       { label: "Tables", content: <RBig icon={<LuTable />} label="Table" onClick={() => insertBlock(block("table"))} /> },
       { label: "Pages", content: <RBig icon={<LuSeparatorHorizontal />} label="Page break" onClick={() => insertBlock(block("pagebreak"))} /> },
+      { label: "References", content: <RBig icon={<LuListOrdered />} label="Table of contents" disabled={doc.blocks.some((b) => b.type === "toc")}
+        onClick={() => insertBlock(block("toc"))} title="Build a linked contents list from Heading 1–3 blocks" /> },
       { label: "Links", content: <div className="w-link">
         <RBig icon={<LuLink />} label="Link" onClick={() => { const s = window.getSelection(); savedRange.current = s && s.rangeCount ? s.getRangeAt(0).cloneRange() : null; setLinkOpen(!linkOpen); }} />
         {linkOpen && (
@@ -475,6 +477,17 @@ export function Editor({ docRef, onClose }: { docRef: DocRef; onClose: () => voi
               <div key={b.id} className={`w-pagebreak ${cls}`} contentEditable={false}><span>Page break</span>
                 <IconButton label="Remove page break" onClick={() => remove(b.id, false)}><LuTrash2 /></IconButton></div>
             );
+            if (b.type === "toc") {
+              const headings = doc.blocks.filter((item) => ["heading1", "heading2", "heading3"].includes(item.type));
+              return <nav key={b.id} className={`w-toc ${cls}`} aria-label="Table of contents" contentEditable={false}
+                onMouseDown={() => setFocusId(b.id)}>
+                <div className="w-toc-title"><strong>Contents</strong><IconButton label="Remove table of contents" onClick={() => remove(b.id, false)}><LuTrash2 /></IconButton></div>
+                {headings.length ? <ol>{headings.map((heading) => <li key={heading.id} style={{ marginLeft: `${(Number(heading.type.slice(-1)) - 1) * 20}px` }}>
+                  <button type="button" onClick={() => { setFocusId(heading.id); document.getElementById(`writer-${heading.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" }); }}>
+                    {plainText(heading.html ?? "") || "(untitled)"}</button>
+                </li>)}</ol> : <p>No headings yet.</p>}
+              </nav>;
+            }
             return (
               <TextBlock key={b.id} b={b} number={n} cls={cls} caret={caret?.id === b.id ? caret.at : null} onCaretDone={() => setCaret(null)}
                 onFocus={() => setFocusId(b.id)} onChange={(html) => setBlock(b.id, { html })}
@@ -554,7 +567,7 @@ function TextBlock({ b, number, cls, caret, onCaretDone, onFocus, onChange, onSp
   const Tag = (b.type === "title" ? "h1" : b.type === "heading1" ? "h2" : b.type === "heading2" ? "h3" : b.type === "heading3" ? "h4" : "div") as any;
   const placeholder = b.type === "title" ? "Title" : b.type.startsWith("heading") ? "Heading" : b.type === "paragraph" ? "Type here, or ask Atlas AI to write it…" : "";
   return (
-    <Tag ref={ref} className={`wb wb-${b.type} ${cls}`} data-block-id={b.id} data-number={b.type === "numbered" ? `${number}.` : undefined}
+    <Tag ref={ref} id={`writer-${b.id}`} className={`wb wb-${b.type} ${cls}`} data-block-id={b.id} data-number={b.type === "numbered" ? `${number}.` : undefined}
       style={b.align ? { textAlign: b.align } : undefined} contentEditable suppressContentEditableWarning spellCheck
       role="textbox" aria-multiline="true" aria-label={STYLE_LABELS[b.type as TextType]} data-placeholder={placeholder}
       onFocus={onFocus} onKeyDown={onKeyDown}

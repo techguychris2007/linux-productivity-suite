@@ -1,7 +1,7 @@
 // Atlas document model (mirror of services/engine/atlas_engine/writer/atlasdoc.py).
 
 export type TextType = "title" | "heading1" | "heading2" | "heading3" | "paragraph" | "quote" | "bullet" | "numbered";
-export type BlockType = TextType | "table" | "pagebreak" | "image";
+export type BlockType = TextType | "table" | "pagebreak" | "image" | "toc";
 export type Align = "left" | "center" | "right" | "justify";
 
 export interface Block { id: string; type: BlockType; html?: string; rows?: string[][]; align?: Align; src?: string; alt?: string; width?: number }
@@ -17,7 +17,7 @@ export const STYLE_LABELS: Record<TextType, string> = {
 export const isText = (t: BlockType): t is TextType => (TEXT_TYPES as string[]).includes(t);
 export const newId = () => "b" + Math.random().toString(16).slice(2, 12).padEnd(10, "0");
 export const block = (type: BlockType, html = ""): Block =>
-  type === "table" ? { id: newId(), type, rows: [["", ""], ["", ""]] } : type === "pagebreak" ? { id: newId(), type } : { id: newId(), type, html };
+  type === "table" ? { id: newId(), type, rows: [["", ""], ["", ""]] } : type === "pagebreak" || type === "toc" ? { id: newId(), type } : { id: newId(), type, html };
 
 export function newDoc(title: string): AtlasDoc {
   return { format: "atlas.doc", version: 1, title, page: { size: "A4", header: "", footer: "" }, blocks: [{ ...block("title"), html: escapeHtml(title) }, block("paragraph")] };

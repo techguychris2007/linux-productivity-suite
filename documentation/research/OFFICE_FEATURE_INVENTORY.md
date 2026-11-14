@@ -53,7 +53,7 @@ Tier: **1** = this milestone, **2** = next, **3** = later.
 | Insert | tables, pictures, shapes, links, page break, header/footer, page numbers, symbols, equations, text box, comments | 🟡 tables, links, page breaks, pictures (size, position, alt text), repeating header/footer text ✅; page numbers, comments 2 | 2 |
 | Design | themes, colour schemes, watermark, page colour/borders | ⬜ | 3 |
 | Layout | margins, orientation, size, columns, breaks, indent/spacing | 🟡 size (A4/Letter); margins/orientation 2 | 2 |
-| References | table of contents, footnotes/endnotes, citations, captions, index | ⬜ → TOC 2 | 2–3 |
+| References | table of contents, footnotes/endnotes, citations, captions, index | 🟡 linked TOC generated from Heading 1–3; footnotes/endnotes and citations 2–3 | 2–3 |
 | Mailings | mail merge, envelopes, labels | ⬜ (could merge from a Sheets file) | 3 |
 | Review | spelling & grammar, word count, read aloud, comments, track changes, compare, protect | 🟡 word count; spelling via system spell-check; comments/track changes 2 | 2 |
 | View | read mode, print layout, ruler, navigation pane, zoom, focus mode | 🟡 zoom; navigation pane 2 | 2 |

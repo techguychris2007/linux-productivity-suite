@@ -98,7 +98,8 @@ _DOC = {"type": "string", "minLength": 1, "description": "Path of the .atlasdoc 
 _BLOCK = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "enum": [t for t in ad.BLOCK_TYPES if t != "image"]},
+        "type": {"type": "string", "enum": [t for t in ad.BLOCK_TYPES if t != "image"],
+                 "description": "Use 'toc' to insert a generated table of contents from Heading 1–3 blocks."},
         "text": {"type": "string", "description": "Block text. Inline **bold**, *italic*, `code` and [link](https://…) are supported."},
         "rows": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}, "description": "Only for type=table: rows of cell texts; first row is the header."},
         "align": {"type": "string", "enum": list(ad.ALIGNS)},
@@ -120,7 +121,7 @@ def register(reg: ToolRegistry, svc: WriterService) -> None:
 
     @reg.tool("writer.create_document",
               "Create a new Writer document (.atlasdoc) with a title and content blocks. Use heading1/2/3 for structure, "
-              "paragraph for body text, bullet/numbered for list items (one block per item), quote, table and pagebreak. "
+              "paragraph for body text, bullet/numbered for list items (one block per item), quote, table, toc and pagebreak. "
               "Optional header and footer text repeat on every exported page.",
               {"type": "object", "properties": {"grant": _GRANT, "path": _DOC, "title": {"type": "string", "minLength": 1},
                                                 "header": {"type": "string", "maxLength": 300}, "footer": {"type": "string", "maxLength": 300},

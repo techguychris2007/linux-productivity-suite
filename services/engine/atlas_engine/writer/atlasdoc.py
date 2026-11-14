@@ -16,7 +16,7 @@ from html.parser import HTMLParser
 from typing import Any
 
 TEXT_TYPES = ("title", "heading1", "heading2", "heading3", "paragraph", "quote", "bullet", "numbered")
-BLOCK_TYPES = TEXT_TYPES + ("table", "pagebreak", "image")
+BLOCK_TYPES = TEXT_TYPES + ("table", "pagebreak", "image", "toc")
 ALIGNS = ("left", "center", "right", "justify")
 INLINE_TAGS = {"b", "strong", "i", "em", "u", "s", "code", "sub", "sup", "br", "a", "span", "font"}
 IMAGE_RE = re.compile(r"^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$")
@@ -191,7 +191,7 @@ def make_block(btype: str, text: str | None = None, html: str | None = None, row
             raise DocError("a table needs 'rows': a list of rows, each a list of cell texts")
         width = max(len(r) for r in rows)
         b["rows"] = [[inline_from_text(str(c)) for c in r] + [""] * (width - len(r)) for r in rows]
-    elif btype != "pagebreak":
+    elif btype not in ("pagebreak", "toc"):
         b["html"] = sanitize_inline(html) if html is not None else inline_from_text(text or "")
     if align:
         if align not in ALIGNS:
@@ -240,7 +240,7 @@ def validate(doc: Any) -> dict:
             nb["alt"] = str(b.get("alt") or "")[:300]
             width = b.get("width")
             nb["width"] = width if isinstance(width, int) and not isinstance(width, bool) and 10 <= width <= 100 else 100
-        elif b["type"] != "pagebreak":
+        elif b["type"] not in ("pagebreak", "toc"):
             nb["html"] = sanitize_inline(str(b.get("html", "")))
         if b.get("align") in ALIGNS:
             nb["align"] = b["align"]
@@ -261,6 +261,8 @@ def outline(doc: dict, max_chars: int = 400) -> list[dict]:
             text = ""
         elif b["type"] == "image":
             text = f"[picture: {b['alt'] or 'no description'}]"
+        elif b["type"] == "toc":
+            text = ""
         else:
             text = inline_to_text(b["html"])
         res.append({"index": i, "type": b["type"], "text": text[:max_chars]})
@@ -290,6 +292,9 @@ def to_html(doc: dict) -> str:
         if t == "pagebreak":
             break_next = True
             continue
+        if t == "toc":
+            parts.append(_toc_html(doc))
+            continue
         style = []
         if b.get("align"):
             style.append(f"text-align: {b['align']}")
@@ -313,11 +318,25 @@ def to_html(doc: dict) -> str:
             parts.append(f'<h1 class="title"{st}><font size="6">{b["html"]}</font></h1>')
         else:
             tag = _TAG[t]
-            parts.append(f"<{tag}{st}>{b['html'] or '&nbsp;'}</{tag}>")
+            anchor = f' id="atlas-{htmllib.escape(b["id"], quote=True)}"' if t in ("heading1", "heading2", "heading3") else ""
+            parts.append(f"<{tag}{anchor}{st}>{b['html'] or '&nbsp;'}</{tag}>")
     if list_open:
         parts.append(f"</{list_open}>")
     title = htmllib.escape(doc["title"])
     return f'<!DOCTYPE html><html><head><meta charset="utf-8"><title>{title}</title></head><body>{"".join(parts)}</body></html>'
+
+
+def _toc_html(doc: dict) -> str:
+    headings = [b for b in doc["blocks"] if b["type"] in ("heading1", "heading2", "heading3")]
+    if not headings:
+        return '<nav class="atlas-toc"><h2>Contents</h2><p>No headings yet.</p></nav>'
+    items = []
+    for b in headings:
+        level = int(b["type"][-1])
+        text = htmllib.escape(inline_to_text(b.get("html", "")), quote=False) or "(untitled)"
+        anchor = htmllib.escape(str(b["id"]), quote=True)
+        items.append(f'<li style="margin-left: {(level - 1) * 20}px"><a href="#atlas-{anchor}">{text}</a></li>')
+    return '<nav class="atlas-toc"><h2>Contents</h2><ul>' + "".join(items) + "</ul></nav>"
 
 
 # ---------------------------------------------------------------- HTML import (from LibreOffice)

@@ -16,6 +16,7 @@ Feature research and the full gap list: [OFFICE_FEATURE_INVENTORY.md](../researc
 - Font colour and highlight (stored as `<span style="color: #rrggbb">` / `background-color`, checked the same way in the shell and engine; kept on DOCX import and export).
 - Font family and size (safe font allow-list and 8–72 pt controls; kept on save, DOCX import and export).
 - Repeating page headers and footers (editable from Layout, stored in `.atlasdoc`, exposed to Atlas AI, and included in DOCX/ODT/PDF exports).
+- Table of contents from Heading 1–3 blocks, with clickable links in the editor and DOCX/ODT/PDF exports; entries regenerate when headings change.
 - Pictures (Insert → Picture): PNG, JPEG, GIF or WebP, scaled to at most 1600 px and stored in the document (limit about 3 MB each); a contextual Picture tab sets size (25–100%), position and alt text. Pictures are exported into DOCX/PDF/ODT.
 - Word and character counts in the status bar; export to DOCX/PDF/ODT from File → Export.
 
@@ -40,7 +41,7 @@ Feature research and the full gap list: [OFFICE_FEATURE_INVENTORY.md](../researc
 - XLSX: read more than the first worksheet; fills, borders and fonts beyond bold/italic/underline; chart styling beyond series colours. ODS export.
 - Multiple worksheets; column widths; fill handle; merge cells; borders.
 - Conditional formatting, data validation, filters, comments; dynamic-array functions.
-- Writer tier 2 remaining: comments, table of contents, and preserving headers/footers when importing existing Word files.
+- Writer tier 2 remaining: comments and preserving headers/footers when importing existing Word files.
 - Additional Sheets and Writer features listed above remain future work. Slides is tracked separately in [the Milestone 5 report](MILESTONE_5_REPORT.md).
 
 ## Fixes

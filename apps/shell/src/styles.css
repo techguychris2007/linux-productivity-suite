@@ -251,6 +251,13 @@ p { margin: 0; }
 .w-page-margin { color: #656565; font: 12px/1.4 var(--font-ui); overflow-wrap: anywhere; }
 .w-page-header { margin: -38px 0 30px; padding-bottom: 8px; border-bottom: 1px solid #dedede; }
 .w-page-footer { margin-top: 48px; padding-top: 8px; border-top: 1px solid #dedede; }
+.w-toc { margin: 0 0 24px; padding: 16px 20px; border: 1px solid #d9d5ce; border-radius: 4px; background: #faf9f7; font-family: var(--font-ui); font-size: 14px; }
+.w-toc.is-focused { outline: 2px solid var(--accent); outline-offset: 2px; }
+.w-toc-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 17px; }
+.w-toc ol { list-style: none; margin: 0; padding: 0; }
+.w-toc li { margin: 3px 0; }
+.w-toc li button { color: #2d5fcf; text-align: left; text-decoration: underline; }
+.w-toc p { margin: 0; color: #6b6b6b; }
 .wb { outline: none; margin: 0 0 10px; border-radius: 3px; position: relative; transition: background 600ms var(--ease); min-height: 1.55em; }
 .wb:empty::before { content: attr(data-placeholder); color: #a5a29c; pointer-events: none; }
 .wb:not(.is-focused):empty::before { content: ""; }
