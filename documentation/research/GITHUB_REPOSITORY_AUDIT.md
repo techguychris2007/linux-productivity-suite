@@ -1,0 +1,29 @@
+# GitHub Repository Audit
+
+Decision key: **Reuse** = use as a dependency unchanged · **Integrate** = run as a separate service/process · **Fork** = maintain a modified copy · **Study** = learn from it only
+
+| Repository | Purpose | Main languages | Licence | Maintenance signal | Decision | Rationale / limitations |
+|---|---|---|---|---|---|---|
+| [ONLYOFFICE/DocumentServer](https://github.com/ONLYOFFICE/DocumentServer) (+ core, sdkjs, web-apps, server) | Online office editors with high OOXML fidelity | JS, C++, Node | AGPL-3.0 [VERIFIED] | Very active: sub-repos updated Feb 2026; v9.4.0 c. Oct 2026 per privacytools [VERIFIED] | **Study**; optional **Integrate** later as a "compatibility mode" | AGPL plus disputed additional terms; heavy server (Postgres/RabbitMQ/nginx [UNVERIFIED]); document model not directly reachable by Atlas tools |
+| [LibreOffice core](https://git.libreoffice.org/core) (GitHub mirror) | Full office suite; LibreOfficeKit API | C++, Java, Python | MPL-2.0 [VERIFIED] | Very active [UNVERIFIED cadence] | **Integrate** (headless process for import/export/PDF, thumbnails) | Must run out of process. The LOK C API isn't thread-safe and serialises on a global mutex [VERIFIED docgo/libreofficekit notes], so use a worker pool of processes |
+| [libreofficekit (Rust crate)](https://docs.rs/crate/libreofficekit/0.3.0) | Rust bindings to LOK, no C++ toolchain required | Rust | check crate | 2025–26 releases [VERIFIED] | **Reuse candidate** for the converter worker | Or use `soffice --headless --convert-to` for simplicity; decide in spike S-DOC-1 |
+| [unoconv](https://github.com/unoconv/unoconv) | LibreOffice converter | Python | GPL-2.0 | **Archived / deprecated** [VERIFIED] | **Avoid** | Abandoned |
+| [dream-num/univer](https://github.com/dream-num/univer) | Spreadsheet/doc/slide SDK, Canvas rendering, formula engine, Facade API | TypeScript | Apache-2.0 core; paid Pro plugins [VERIFIED] | v1.0.3 on 2026-09-29, ~22k stars [VERIFIED] | **Reuse** for Atlas Sheets | Some features (e.g. full xlsx import/export, collaboration) are Pro/paid [VERIFIED README boundary statement]. Use LibreOffice for xlsx conversion instead. Docs/Slides modules are less mature [UNVERIFIED] |
+| ProseMirror / Tiptap | Rich-text editing framework | TypeScript | MIT [UNVERIFIED] | Active [UNVERIFIED] | **Reuse** for Atlas Writer | Page layout (pagination, headers/footers) isn't native. Needs custom pagination work, the main Writer risk |
+| [tauri-apps/tauri](https://github.com/tauri-apps/tauri) | Desktop shell (Rust + system webview) | Rust, TS | MIT/Apache-2.0 [UNVERIFIED] | Active | **Reuse** | Linux uses WebKitGTK: no Widevine, GStreamer-dependent codecs, `tauri://` origin issues with YouTube |
+| [mltframework/mlt](https://github.com/mltframework/mlt) | Multimedia editing framework | C, C++ | LGPL-2.1 core [VERIFIED] | 7.36.1 Dec 2025 / 7.38.0 [VERIFIED] | **Reuse** (dynamic link) / **Integrate** (melt) | Preview pipeline into a webview must be engineered |
+| [KDE/kdenlive](https://invent.kde.org/multimedia/kdenlive) | Video editor | C++/Qt | GPL-3.0+ [VERIFIED] | Active; 26.04.3 packaged [VERIFIED freshports] | **Study** | Qt app, not embeddable |
+| [FFmpeg](https://github.com/FFmpeg/FFmpeg) | Codecs, filters, probing | C | LGPL/GPL by build [UNVERIFIED] | Active | **Integrate** (CLI/system lib) | Use the distro ffmpeg; don't ship a GPL build inside AppImage without review |
+| [blender/blender](https://projects.blender.org/blender/blender) | 3D suite + VSE | C/C++/Python | GPL [UNVERIFIED] | Active | **Study** | Too heavy to integrate |
+| [Comfy-Org/ComfyUI](https://github.com/Comfy-Org/ComfyUI) | Generative node engine with an API | Python | GPL-3.0 [VERIFIED] | ~weekly releases; ~126k stars [VERIFIED] | **Integrate** (optional external service) | GPU-bound; custom nodes have mixed licences |
+| [bytedance/UI-TARS-desktop](https://github.com/bytedance/UI-TARS-desktop) | GUI agent app + SDK | TypeScript | Apache-2.0 [VERIFIED] | v0.3.0 Nov 2025; updated Jul 2026 [VERIFIED] | **Study**; model **Integrate** via endpoint | Desktop app is Electron-based [UNVERIFIED]; Linux Wayland support not confirmed |
+| [bytedance/UI-TARS](https://github.com/bytedance/UI-TARS) | GUI-grounding VLM weights | Python | check model card | Active | **Integrate** (optional provider) | 7B+ needs a GPU [UNVERIFIED VRAM] |
+| [openinterpreter/openinterpreter](https://github.com/openinterpreter/openinterpreter) | Now a Rust coding agent | Rust | Apache-2.0 [VERIFIED] | Active 2026 | **Study** | No longer a computer-control tool |
+| [jellyfin/jellyfin](https://github.com/jellyfin/jellyfin) | Media server | C# (.NET) | GPL-2.0 [VERIFIED] | v10.11.x, 2026 [VERIFIED] | **Integrate** (optional server via REST) | Never copy its code (GPL-2.0-only) |
+| [johnohhh1/portal_use](https://github.com/johnohhh1/portal_use) | Wayland computer-use over MCP (portal + libei + AT-SPI) | Python | check repo | 2026 [VERIFIED] | **Study** | Closest reference for the Operator on Ubuntu 26.04 |
+| [cushycush/wdotool](https://github.com/cushycush/wdotool) | xdotool equivalent for Wayland | Rust [UNVERIFIED] | check repo | 2026 | **Study / optional reuse** | |
+| [smythp/tine](https://github.com/smythp/tine) | GNOME Wayland agent driver (uinput) | Python | check repo | Alpha | **Study** | Skips consent; not Atlas's security model |
+| CryptPad | Encrypted collaborative office | JS | AGPL-3.0 [UNVERIFIED] | Active | **Study** (it embeds ONLYOFFICE editors) | Shows ONLYOFFICE integration patterns; AGPL |
+| [microsoft/playwright](https://github.com/microsoft/playwright) | Browser automation | TS | Apache-2.0 [UNVERIFIED] | Active | **Reuse** (Operator level 1) | Only for browsers Atlas launches |
+
+**Rule applied:** no repository marked "check repo" or [UNVERIFIED] for its licence may be added as a dependency until its LICENSE file has been read and recorded in `THIRD_PARTY_LICENSES`.

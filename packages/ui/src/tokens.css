@@ -1,0 +1,75 @@
+/* Atlas design tokens — the single source of truth for colour, type, spacing, radius and motion.
+   Light and dark themes; apps never hard-code colours. */
+
+:root {
+  --font-ui: "Ubuntu Sans", "Ubuntu", "Cantarell", "Inter", system-ui, sans-serif;
+  --font-mono: "Ubuntu Sans Mono", "Ubuntu Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --text-xs: 11px; --text-sm: 12.5px; --text-md: 14px; --text-lg: 16px; --text-xl: 20px; --text-2xl: 26px;
+  --leading: 1.45;
+
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --radius-sm: 6px; --radius-md: 9px; --radius-lg: 13px; --radius-pill: 999px;
+
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --dur-fast: 120ms; --dur: 180ms;
+
+  /* Department hues (used sparingly: icons and small accents only) */
+  --hue-productivity: #3b6fd8;
+  --hue-creative: #c2527a;
+  --hue-entertainment: #d4862a;
+  --hue-intelligence: #2f9d8f;
+  --hue-system: #6b7385;
+}
+
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f3f1;
+  --bg-sunken: #ebe9e6;
+  --surface: #ffffff;
+  --surface-2: #faf9f8;
+  --surface-hover: #f1efec;
+  --border: #e2dfda;
+  --border-strong: #cfcbc4;
+  --text: #1d1c1a;
+  --text-2: #5b5853;
+  --text-3: #8a867f;
+  --accent: #2d5fcf;
+  --accent-hover: #244fae;
+  --accent-soft: #e6edfb;
+  --on-accent: #ffffff;
+  --success: #23855a; --success-soft: #e3f3ea;
+  --warning: #a8670c; --warning-soft: #fbf0dc;
+  --danger: #c23b33;  --danger-soft: #fbe6e4;
+  --focus: 0 0 0 3px rgba(45,95,207,.28);
+  --shadow-1: 0 1px 2px rgba(20,18,15,.06), 0 1px 1px rgba(20,18,15,.04);
+  --shadow-2: 0 8px 28px rgba(20,18,15,.12), 0 2px 6px rgba(20,18,15,.06);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141518;
+  --bg-sunken: #0f1012;
+  --surface: #1c1d21;
+  --surface-2: #202126;
+  --surface-hover: #26272d;
+  --border: #2c2e34;
+  --border-strong: #3a3d45;
+  --text: #ecebe8;
+  --text-2: #a9a7a2;
+  --text-3: #75736e;
+  --accent: #7aa2ff;
+  --accent-hover: #93b4ff;
+  --accent-soft: #1f2a44;
+  --on-accent: #0c1222;
+  --success: #4cc38a; --success-soft: #163126;
+  --warning: #e3a447; --warning-soft: #362811;
+  --danger: #f07167;  --danger-soft: #3a1c1a;
+  --focus: 0 0 0 3px rgba(122,162,255,.35);
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-2: 0 12px 32px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}

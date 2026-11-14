@@ -1,0 +1,24 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install
+      - run: pip install pytest
+      - run: cargo build --release --manifest-path crates/atlas-core/Cargo.toml
+      - run: pnpm test:core
+      - run: pnpm test:engine
+      - run: npx playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: e2e-screenshots, path: tests/e2e/screenshots }
+  # Desktop packaging (.deb / AppImage) is enabled in Milestone 2 once src-tauri compiles.

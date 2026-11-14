@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Atlas",
+  "version": "0.1.0",
+  "identifier": "org.projectatlas.Atlas",
+  "build": {
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "node build.mjs"
+  },
+  "app": {
+    "windows": [{ "title": "Atlas", "width": 1440, "height": 900, "minWidth": 960, "minHeight": 600 }],
+    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "category": "Office",
+    "shortDescription": "Private AI productivity suite for Ubuntu",
+    "linux": {
+      "deb": { "depends": ["python3 (>= 3.12)", "xdg-desktop-portal-gnome", "at-spi2-core"] }
+    }
+  }
+}

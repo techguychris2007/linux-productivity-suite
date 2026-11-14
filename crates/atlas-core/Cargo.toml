@@ -1,0 +1,13 @@
+[package]
+name = "atlas-core"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Project Atlas security core: permission broker, approvals, audit log and filesystem gateway"
+
+# Deliberately dependency-free for Milestone 1 (offline build environment).
+[dependencies]
+
+[[bin]]
+name = "atlas-core-host"
+path = "src/bin/atlas-core-host.rs"

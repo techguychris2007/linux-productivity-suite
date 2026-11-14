@@ -1,0 +1,17 @@
+[project]
+name = "atlas-engine"
+version = "0.1.0"
+description = "Project Atlas AI orchestrator"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.12"
+# Milestone 1 runs on the standard library only (lightweight, no paid services required).
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+atlas-engine = "atlas_engine.devserver:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
