@@ -6,6 +6,7 @@ use crate::util::now_ms;
 use std::path::{Path, PathBuf};
 
 pub const MAX_READ_BYTES: u64 = 8 * 1024 * 1024;
+pub const MAX_BINARY_BYTES: u64 = 25 * 1024 * 1024;
 
 fn io(e: std::io::Error) -> String { e.to_string() }
 
@@ -53,6 +54,10 @@ pub fn read_text(p: &Path, max: u64) -> Result<(String, bool), String> {
 
 /// Write text atomically. If the file exists, a backup copy is stored first and its location returned.
 pub fn write_text(p: &Path, content: &str, backups: &Path, overwrite: bool) -> Result<Option<PathBuf>, String> {
+    write_bytes(p, content.as_bytes(), backups, overwrite)
+}
+
+pub fn write_bytes(p: &Path, content: &[u8], backups: &Path, overwrite: bool) -> Result<Option<PathBuf>, String> {
     let mut backup = None;
     if p.exists() {
         if !overwrite { return Err("file already exists".into()); }

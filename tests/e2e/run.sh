@@ -8,6 +8,10 @@ mkdir -p "$DOCS/reports"
 printf '# Q3 plan\n\n- Ship Atlas Writer MVP\n- Usability test the Drive app\n' > "$DOCS/plan.md"
 printf 'name,score\nada,9\nlin,8\n' > "$DOCS/reports/scores.csv"
 printf 'Meeting notes from Monday.\n' > "$DOCS/notes.txt"
+# A real Word file to import, produced by LibreOffice.
+printf '<html><body><h1>Proposal</h1><p>We propose a <b>private</b> office suite.</p><ul><li>Fast</li><li>Free</li></ul></body></html>' > "$WORK/p.html"
+soffice -env:UserInstallation=file://$WORK/lo --headless --infilter="HTML (StarWriter)" --convert-to docx:"MS Word 2007 XML" --outdir "$WORK" "$WORK/p.html" >/dev/null 2>&1
+mv "$WORK/p.docx" "$DOCS/Old proposal.docx"
 export ATLAS_DATA_DIR="$WORK/data" ATLAS_UI_PORT="${ATLAS_UI_PORT:-5174}" ATLAS_CORE_PORT="${ATLAS_CORE_PORT:-47811}" ATLAS_ENGINE_PORT="${ATLAS_ENGINE_PORT:-47812}"
 pids=(); cleanup() { kill "${pids[@]}" 2>/dev/null || true; }; trap cleanup EXIT
 "$ROOT/infrastructure/scripts/dev.sh" > "$WORK/dev.log" 2>&1 & pids+=($!)

@@ -33,7 +33,9 @@ from .orchestrator import Orchestrator
 from .providers import PROVIDER_KINDS, ProviderError, make_provider
 from .providers.gemini import GeminiProvider
 from .settings import Settings
-from .tools import ToolRegistry
+from .tools import ToolError, ToolRegistry
+from .writer import service as writer_service
+from .writer.converter import LibreOffice
 
 
 class Engine:
@@ -42,8 +44,11 @@ class Engine:
         self.bus = EventBus()
         self.registry = ToolRegistry()
         self.core = core
+        self.lo = LibreOffice(data_dir / "engine" / "lo-profile")
+        self.writer = writer_service.WriterService(core, self.lo) if core else None
         if core:
             drive.register(self.registry, core)
+            writer_service.register(self.registry, self.writer)
         self._provider = None
         self.orch = Orchestrator(self.registry, self.bus, self.provider, approvals=core)
 
@@ -119,7 +124,7 @@ def make_handler(engine: Engine, ui_token: str, origin: str | None):
             u = urlparse(self.path)
             p = u.path
             if p == "/v1/health":
-                return self._send(200, {"result": {"version": __version__, "core": engine.core is not None,
+                return self._send(200, {"result": {"version": __version__, "core": engine.core is not None, "libreoffice": engine.lo.available(),
                                                    "provider": engine.settings.provider_public()}})
             if p == "/v1/providers":
                 return self._send(200, {"result": {"kinds": PROVIDER_KINDS, "current": engine.settings.provider_public()}})
@@ -164,6 +169,12 @@ def make_handler(engine: Engine, ui_token: str, origin: str | None):
                     key = body.get("api_key") or (engine.settings.get("provider") or {}).get("api_key", "")
                     g = GeminiProvider(key, model="placeholder")
                     return self._send(200, {"result": {"models": g.list_models(), "suggested": g.pick_default_model()}})
+                if p in ("/v1/writer/export", "/v1/writer/import"):
+                    if not engine.writer:
+                        return self._send(503, {"error": {"code": "unavailable", "message": "core not connected"}})
+                    if p.endswith("export"):
+                        return self._send(200, {"result": engine.writer.export(body["grant"], body["path"], body.get("format", "docx"))})
+                    return self._send(200, {"result": engine.writer.import_file(body["grant"], body["path"])})
                 if p == "/v1/tasks":
                     goal = (body.get("goal") or "").strip()
                     if not goal:
@@ -180,6 +191,10 @@ def make_handler(engine: Engine, ui_token: str, origin: str | None):
                 return self._send(404, {"error": {"code": "not_found", "message": p}})
             except ProviderError as e:
                 return self._send(400, {"error": {"code": "provider_error", "message": str(e)}})
+            except ToolError as e:
+                return self._send(400, {"error": {"code": e.code, "message": str(e)}})
+            except KeyError as e:
+                return self._send(400, {"error": {"code": "invalid_argument", "message": f"missing {e}"}})
             except (ValueError, json.JSONDecodeError) as e:
                 return self._send(400, {"error": {"code": "bad_request", "message": str(e)}})
 

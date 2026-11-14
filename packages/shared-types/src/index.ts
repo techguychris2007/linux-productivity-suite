@@ -51,7 +51,7 @@ export interface EngineEvent {
     | "task.created" | "task.started" | "task.status" | "task.completed" | "task.failed" | "task.cancelled" | "task.user_control"
     | "plan.updated" | "model.request" | "assistant.message"
     | "tool.started" | "tool.finished" | "tool.failed"
-    | "approval.required" | "approval.resolved" | "verify.started" | "verify.result";
+    | "approval.required" | "approval.resolved" | "verify.started" | "verify.result" | "resource.changed";
   data: Record<string, any>;
   ts: number;
 }

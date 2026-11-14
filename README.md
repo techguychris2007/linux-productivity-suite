@@ -8,21 +8,22 @@ Atlas is **free and lightweight**. It doesn't ship its own AI model and doesn't 
 - **A local model server** (Ollama, llama.cpp or LM Studio). It's fully offline, and nothing leaves your computer.
 - Anthropic Claude (optional, paid).
 
-## Status: Milestone 1 (foundation)
+## Status: Milestones 1 and 3 (foundation + Writer)
 
 | Part | State |
 |---|---|
-| Security core (Rust): folder grants, path confinement, approvals, audit log, filesystem gateway | ✅ Working, 13 tests |
-| Atlas Engine (Python, standard library only): orchestrator, tool registry, Gemini / local / Anthropic providers, Drive tools, live event stream | ✅ Working, 16 tests incl. real core integration |
-| Shell UI (React): launcher, search (Ctrl K), Drive, Settings, notifications, Atlas AI panel with live plan, approvals, pause, stop and take-control | ✅ Working, 13 end-to-end browser checks |
-| Writer, Sheets, Slides and the other apps | Planned (see the milestone on each tile) |
+| Security core (Rust): folder grants, path confinement, approvals, audit log, filesystem gateway | ✅ Working, 16 tests |
+| Atlas Engine (Python, standard library only): orchestrator, tool registry, Gemini / local / Anthropic providers, Drive tools, live event stream | ✅ Working, 23 tests incl. real core + real LibreOffice |
+| Shell UI (React): launcher, search (Ctrl K), Drive, Settings, notifications, Atlas AI panel with live plan, approvals, pause, stop and take-control | ✅ Working, 18 end-to-end browser checks |
+| **Writer**: documents with styles, lists, tables; DOCX / PDF / ODT export and Word import via LibreOffice; Atlas AI writes and edits documents live | ✅ Working |
+| Sheets, Slides and the other apps | Planned (see the milestone on each tile) |
 | Desktop packaging (Tauri → .deb / AppImage) | Code written, **not yet compiled** (the build environment was offline) |
 
-See `documentation/development/MILESTONE_1_REPORT.md` for details.
+See `documentation/development/MILESTONE_1_REPORT.md` and `MILESTONE_3_REPORT.md` for details.
 
 ## Run it (Ubuntu 24.04 / 26.04)
 
-Requirements: Rust (stable), Node 22 + pnpm, Python 3.12+.
+Requirements: Rust (stable), Node 22 + pnpm, Python 3.12+, and LibreOffice for Writer import/export (`sudo apt install libreoffice-writer`; usually already installed on Ubuntu).
 
 ```bash
 pnpm install

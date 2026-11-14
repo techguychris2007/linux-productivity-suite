@@ -21,7 +21,15 @@ interface Ctx {
   setAiOpen: (v: boolean) => void;
   aiDraft: string;
   askAi: (prompt: string) => void;
+  /** File the Writer should open next (set by Drive / search). */
+  writerTarget: DocRef | null;
+  openInWriter: (ref: DocRef | null) => void;
+  /** Document currently open in an app; sent to Atlas AI as context. */
+  activeDoc: (DocRef & { app: string; title?: string }) | null;
+  setActiveDoc: (d: (DocRef & { app: string; title?: string }) | null) => void;
 }
+
+export interface DocRef { grant: string; path: string }
 
 const AtlasCtx = createContext<Ctx | null>(null);
 export const useAtlas = () => {
@@ -42,6 +50,8 @@ export function AtlasProvider({ bridge, children }: { bridge: AtlasBridge; child
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [aiOpen, setAiOpenState] = useState<boolean>(() => load("atlas.aiOpen", true));
   const [aiDraft, setAiDraft] = useState("");
+  const [writerTarget, setWriterTarget] = useState<DocRef | null>(() => load("atlas.writerTarget", null));
+  const [activeDoc, setActiveDoc] = useState<Ctx["activeDoc"]>(null);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -78,8 +88,11 @@ export function AtlasProvider({ bridge, children }: { bridge: AtlasBridge; child
     bridge, route, go, theme, grants, refreshGrants, toasts, notify, dismiss, markAllRead, aiOpen, aiDraft,
     setTheme: (t) => { setThemeState(t); save("atlas.theme", t); },
     setAiOpen: (v) => { setAiOpenState(v); save("atlas.aiOpen", v); },
-    askAi: (p) => { setAiDraft(p); setAiOpenState(true); save("atlas.aiOpen", true); },
-  }), [bridge, route, go, theme, grants, refreshGrants, toasts, notify, dismiss, markAllRead, aiOpen, aiDraft]);
+    askAi: (p) => { setAiDraft(p); if (p) { setAiOpenState(true); save("atlas.aiOpen", true); } },
+    writerTarget,
+    openInWriter: (ref) => { setWriterTarget(ref); save("atlas.writerTarget", ref); if (ref) go("writer"); },
+    activeDoc, setActiveDoc,
+  }), [bridge, route, go, theme, grants, refreshGrants, toasts, notify, dismiss, markAllRead, aiOpen, aiDraft, writerTarget, activeDoc]);
 
   return <AtlasCtx.Provider value={value}>{children}</AtlasCtx.Provider>;
 }

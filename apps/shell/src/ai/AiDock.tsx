@@ -42,10 +42,17 @@ const STATUS_LABEL: Record<string, string> = {
   queued: "Queued", running: "Working", paused: "Paused", waiting_approval: "Needs your approval", verifying: "Checking the result",
   completed: "Done", failed: "Failed", cancelled: "Stopped",
 };
-const toolLabel = (name: string) => name.replace(/^drive\./, "Drive · ").replace(/_/g, " ");
+const toolLabel = (name: string) => {
+  const [app, action = ""] = name.split(".");
+  const a = action.replace(/_/g, " ");
+  return `${app.charAt(0).toUpperCase()}${app.slice(1)} · ${a.charAt(0).toUpperCase()}${a.slice(1)}`;
+};
+/** Minimal, safe Markdown for assistant messages: escape first, then **bold**, *italic*, `code`. */
+const renderMd = (text: string) => ({ __html: text.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!))
+  .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*(?!\s)(.+?)\*/g, "$1<i>$2</i>").replace(/`([^`]+)`/g, "<code>$1</code>") });
 
 export function AiDock() {
-  const { bridge, aiDraft, askAi, setAiOpen, notify, grants, route, go } = useAtlas();
+  const { bridge, aiDraft, askAi, setAiOpen, notify, grants, route, go, activeDoc } = useAtlas();
   const [state, dispatch] = useReducer(reducer, { tasks: {}, order: [], events: {}, lastSeq: 0 });
   const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -85,7 +92,7 @@ export function AiDock() {
     const goal = input.trim();
     if (!goal) return;
     try {
-      const t = await bridge.engine<TaskSummary>("POST", "/tasks", { goal, app_context: { app: route, shared_folders: grants.filter((g) => g.ai_allowed).map((g) => ({ grant: g.id, label: g.label })) } });
+      const t = await bridge.engine<TaskSummary>("POST", "/tasks", { goal, app_context: { app: route.split(":")[0], ...(activeDoc ? { open_document: activeDoc } : {}), shared_folders: grants.filter((g) => g.ai_allowed).map((g) => ({ grant: g.id, label: g.label })) } });
       dispatch({ type: "task", task: t }); setSelected(t.id); setInput("");
     } catch (err: any) { notify({ tone: "danger", title: "Atlas AI couldn't start", body: err.message }); }
   };
@@ -166,7 +173,7 @@ export function AiDock() {
                   {e.type === "tool.started" && <><span className="tl-dot" /> <span className="tl-tool">{toolLabel(e.data.name)}</span>{e.data.risk !== "read" && <Badge tone={e.data.risk === "write" ? "accent" : "danger"}>{e.data.risk}</Badge>}</>}
                   {e.type === "tool.finished" && <><LuCheck className="ok" /> <span className="muted ellipsis">{e.data.summary}</span></>}
                   {e.type === "tool.failed" && <><LuTriangleAlert className="bad" /> <span className="muted">{e.data.error}</span></>}
-                  {e.type === "assistant.message" && <div className="msg">{e.data.text}</div>}
+                  {e.type === "assistant.message" && <div className="msg" dangerouslySetInnerHTML={renderMd(e.data.text)} />}
                   {e.type === "verify.result" && <span className="muted">{e.data.passed ? "Verified the result" : "Verification asked for fixes"}</span>}
                   {e.type === "task.user_control" && <span className="muted">{e.data.message}</span>}
                   {e.type === "task.failed" && <div className="banner banner-danger">{e.data.error}</div>}

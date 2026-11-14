@@ -15,7 +15,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 
-const MAX_BODY: usize = 16 * 1024 * 1024;
+const MAX_BODY: usize = 40 * 1024 * 1024; // 25 MB file as base64 + JSON overhead
 
 struct Ctx { broker: Mutex<Broker>, ui_token: String, engine_token: String, origin: Option<String> }
 

@@ -2,12 +2,13 @@
 // Requires the dev stack (infrastructure/scripts/dev.sh) and tests/e2e/fake_llm.py running.
 // Usage: ATLAS_URL="http://127.0.0.1:5173/#token=…" DOCS=/path/to/Documents SHOTS=dir node tests/e2e/shell.e2e.mjs
 import { createRequire } from "node:module";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const require = createRequire(import.meta.url);
 const paths = (process.env.ATLAS_NODE_PATH || "").split(":").filter(Boolean);
 const { chromium } = require(require.resolve("playwright", { paths }));
+const JSZip = require(require.resolve("jszip", { paths }));
 
 const URL = process.env.ATLAS_URL;
 const DOCS = process.env.DOCS;
@@ -18,7 +19,7 @@ mkdirSync(SHOTS, { recursive: true });
 const results = [];
 async function step(name, fn) {
   try { await fn(); results.push(["PASS", name]); console.log("PASS", name); }
-  catch (e) { results.push(["FAIL", name]); console.log("FAIL", name, "\n   ", e.message.split("\n").slice(0, 4).join(" | ")); }
+  catch (e) { results.push(["FAIL", name]); console.log("FAIL", name, "\n   ", e.message.split("\n").slice(0, 12).join(" | ")); }
 }
 
 const browser = await chromium.launch();
@@ -36,9 +37,9 @@ await step("home renders launcher and greeting", async () => {
 });
 
 await step("planned apps are honest placeholders", async () => {
-  await page.locator(".rail-btn", { hasText: "Writer" }).click();
+  await page.locator(".rail-btn", { hasText: "Sheets" }).click();
   await page.getByText("Planned for").waitFor();
-  assert.ok(await page.getByText("Milestone 3").isVisible());
+  assert.ok(await page.getByText("Milestone 4").isVisible());
 });
 
 await step("share a folder in Settings", async () => {
@@ -127,12 +128,93 @@ await step("activity log records the AI action", async () => {
   await page.locator("tr", { hasText: "fs.trash" }).filter({ hasText: "Atlas AI" }).filter({ hasText: "ok" }).first().waitFor();
 });
 
+
+await step("Writer: create, type, format, autosave to disk", async () => {
+  await page.locator(".rail-btn", { hasText: "Writer" }).click();
+  await page.getByRole("button", { name: "New document" }).click();
+  await page.getByLabel("Name").fill("Meeting notes");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await page.locator(".wb-title", { hasText: "Meeting notes" }).waitFor();
+  await page.locator(".wb-paragraph").first().click();
+  await page.keyboard.type("Agenda");
+  await page.getByLabel("Paragraph style").selectOption("heading1");
+  await page.locator(".wb-heading1").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Budget is ");
+  await page.keyboard.press("Control+b"); await page.keyboard.type("approved"); await page.keyboard.press("Control+b");
+  await page.keyboard.type(".");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Bulleted list" }).click();
+  await page.keyboard.type("First item"); await page.keyboard.press("Enter"); await page.keyboard.type("Second item");
+  await page.locator(".w-save-saved").waitFor({ timeout: 8000 });
+  const saved = JSON.parse(readFileSync(`${DOCS}/Meeting notes.atlasdoc`, "utf8"));
+  const types = saved.blocks.map((b) => b.type);
+  assert.deepEqual(types, ["title", "heading1", "paragraph", "bullet", "bullet"]);
+  assert.equal(saved.blocks[1].html, "Agenda");
+  assert.equal(await page.locator(".wb-heading1").innerText(), "Agenda");
+  assert.match(saved.blocks[2].html, /<b>approved<\/b>/);
+  assert.equal(saved.blocks[4].html, "Second item");
+  await page.screenshot({ path: `${SHOTS}/09-writer.png` });
+});
+
+await step("Writer: export DOCX (real Word headings) and PDF", async () => {
+  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("menuitem", { name: /Word document/ }).click();
+  await page.locator(".toast", { hasText: "Exported Meeting notes.docx" }).waitFor({ timeout: 30000 });
+  const zip = await JSZip.loadAsync(readFileSync(`${DOCS}/Meeting notes.docx`));
+  const xml = await zip.file("word/document.xml").async("string");
+  assert.match(xml, /w:val="Heading1"/); assert.match(xml, /approved/);
+  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("menuitem", { name: /PDF/ }).click();
+  await page.locator(".toast", { hasText: "Exported Meeting notes.pdf" }).waitFor({ timeout: 30000 });
+  assert.equal(readFileSync(`${DOCS}/Meeting notes.pdf`).subarray(0, 5).toString(), "%PDF-");
+});
+
+await step("Writer: Atlas AI edits the open document and it updates live", async () => {
+  await page.getByLabel("Message Atlas AI").fill("Add a conclusion to this document");
+  await page.getByLabel("Message Atlas AI").press("Enter");
+  await page.locator(".ai-dock .goal", { hasText: "Add a conclusion" }).waitFor();
+  await page.locator(".wb", { hasText: "Writing in Atlas is fast and private." }).waitFor({ timeout: 20000 });
+  await page.locator(".ai-flash").first().waitFor();
+  await page.screenshot({ path: `${SHOTS}/10-writer-ai-live.png` });
+  await page.locator(".ai-dock .status-completed").waitFor({ timeout: 15000 });
+  const saved = JSON.parse(readFileSync(`${DOCS}/Meeting notes.atlasdoc`, "utf8"));
+  assert.equal(saved.blocks.at(-2).type, "heading1"); assert.match(saved.blocks.at(-2).html, /Conclusion/);
+});
+
+await step("Writer: import a real Word file", async () => {
+  await page.getByRole("button", { name: "Back to documents" }).click();
+  await page.locator(".import-list li", { hasText: "Old proposal.docx" }).getByRole("button", { name: "Open in Writer" }).click();
+  await page.locator(".wb-heading1", { hasText: "Proposal" }).waitFor({ timeout: 30000 });
+  await page.locator(".wb-paragraph b", { hasText: "private" }).waitFor();
+  assert.equal(await page.locator(".wb-bullet").count(), 2);
+});
+
+await step("Atlas AI writes a report and exports it to Word", async () => {
+  await page.getByLabel("Message Atlas AI").fill("Write a short project report");
+  await page.getByLabel("Message Atlas AI").press("Enter");
+  await page.locator(".ai-dock .goal", { hasText: "Write a short project report" }).waitFor();
+  await page.locator(".ai-dock .status-completed").waitFor({ timeout: 30000 });
+  assert.ok(existsSync(`${DOCS}/Project report.atlasdoc`) && existsSync(`${DOCS}/Project report.docx`));
+  await page.getByRole("button", { name: "Back to documents" }).click();
+  await page.locator(".doc-card", { hasText: "Project report" }).click();
+  await page.locator(".w-table td", { hasText: "Sheets" }).waitFor();
+  await page.screenshot({ path: `${SHOTS}/11-writer-ai-report.png` });
+});
+
 await step("dark theme", async () => {
+  await page.locator(".rail-btn", { hasText: "Settings" }).click();
   await page.locator(".settings-nav button", { hasText: "Appearance" }).click();
   await page.getByRole("radio", { name: "Dark" }).click();
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "dark");
   await page.locator(".rail-btn", { hasText: "Home" }).click();
   await page.screenshot({ path: `${SHOTS}/08-home-dark.png` });
+  await page.locator(".rail-btn", { hasText: "Writer" }).click();
+  await page.getByRole("button", { name: "Back to documents" }).click();
+  await page.locator(".doc-card", { hasText: "Meeting notes" }).click();
+  await page.locator(".wb-title").waitFor();
+  await page.screenshot({ path: `${SHOTS}/12-writer-dark.png` });
 });
 
 await step("no uncaught page errors", async () => { assert.deepEqual(errors, []); });

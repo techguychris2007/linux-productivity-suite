@@ -18,6 +18,8 @@ class ToolResult:
     source: str | None = None
     # Short, human-readable outcome shown in the activity panel (never sent to the model).
     summary: str | None = None
+    # Resources this call changed, e.g. [{"kind": "document", "grant": ..., "path": ...}]; open editors reload them.
+    changed: list[dict] = field(default_factory=list)
 
 
 @dataclass

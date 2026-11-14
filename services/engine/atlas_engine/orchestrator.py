@@ -271,6 +271,8 @@ class Orchestrator:
         content = wrap(res.content, res.source) if res.untrusted else (
             res.content if isinstance(res.content, str) else json.dumps(res.content, ensure_ascii=False))
         self.bus.emit(task.id, "tool.finished", call_id=call.id, name=tool.name, summary=res.summary or _short(res.content, 200))
+        for ch in res.changed:
+            self.bus.emit(task.id, "resource.changed", **ch)
         return result(content)
 
     def _engine_approval(self, task: Task, call: ToolCall, risk: str) -> str:

@@ -73,3 +73,26 @@ fn ai_only_sees_ai_allowed_grants() {
     let e = b.dispatch(Caller::Engine, "fs.list", &Value::obj().with("grant", pg.str_field("id").unwrap())).unwrap_err();
     assert_eq!(e.code, "forbidden");
 }
+
+#[test]
+fn binary_roundtrip_with_backup() {
+    let (mut b, root, g) = setup("bin");
+    let data = atlas_core::b64::encode(&[0u8, 1, 2, 250, 255]);
+    let w = Value::obj().with("grant", g.as_str()).with("path", "out/x.bin").with("data", data.as_str());
+    b.dispatch(Caller::Engine, "fs.write_base64", &w).unwrap();
+    assert_eq!(std::fs::read(root.join("out/x.bin")).unwrap(), vec![0u8, 1, 2, 250, 255]);
+    assert_eq!(b.dispatch(Caller::Engine, "fs.write_base64", &w).unwrap_err().code, "io", "no silent overwrite");
+    let r = b.dispatch(Caller::Engine, "fs.write_base64", &w.clone().with("overwrite", true)).unwrap();
+    assert!(r.str_field("backup").is_some());
+    let back = b.dispatch(Caller::Engine, "fs.read_base64", &Value::obj().with("grant", g.as_str()).with("path", "out/x.bin")).unwrap();
+    assert_eq!(back.str_field("data"), Some(data.as_str()));
+}
+
+#[test]
+fn only_ui_can_skip_backup() {
+    let (mut b, _root, g) = setup("nobackup");
+    let w = |who| Value::obj().with("grant", g.as_str()).with("path", "d.atlasdoc").with("content", who).with("overwrite", true).with("backup", false);
+    b.dispatch(Caller::Ui, "fs.write_text", &w("v1")).unwrap();
+    assert!(b.dispatch(Caller::Ui, "fs.write_text", &w("v2")).unwrap().get("backup") == Some(&Value::Null));
+    assert!(b.dispatch(Caller::Engine, "fs.write_text", &w("v3")).unwrap().str_field("backup").is_some(), "AI edits always backed up");
+}

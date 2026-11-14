@@ -5,6 +5,7 @@
 
 pub mod approvals;
 pub mod audit;
+pub mod b64;
 pub mod fsgw;
 pub mod json;
 pub mod permissions;
@@ -58,8 +59,8 @@ pub fn command_spec(cmd: &str) -> Option<(Option<Caller>, Risk)> {
         "core.info" => (None, Risk::Read),
         "grants.list" => (None, Risk::Read),
         "grants.add" | "grants.revoke" => (Some(Ui), Risk::System),
-        "fs.list" | "fs.stat" | "fs.read_text" | "fs.search" => (None, Risk::Read),
-        "fs.write_text" | "fs.mkdir" | "fs.move" => (None, Risk::Write),
+        "fs.list" | "fs.stat" | "fs.read_text" | "fs.read_base64" | "fs.search" => (None, Risk::Read),
+        "fs.write_text" | "fs.write_base64" | "fs.mkdir" | "fs.move" => (None, Risk::Write),
         "fs.trash" => (None, Risk::Destructive),
         "approvals.pending" | "approvals.approve" | "approvals.deny" | "audit.recent" => (Some(Ui), Risk::Read),
         "approvals.request" | "approvals.claim" | "approvals.consume" => (Some(Engine), Risk::Read),
@@ -105,7 +106,7 @@ impl Broker {
         let Some((required, risk)) = command_spec(cmd) else {
             return Err(ApiError::new("unknown_command", format!("unknown command '{}'", cmd)));
         };
-        let detail = { let mut a = args.clone(); if let Value::Obj(m) = &mut a { m.remove("approval_token"); m.remove("content"); } a };
+        let detail = { let mut a = args.clone(); if let Value::Obj(m) = &mut a { m.remove("approval_token"); m.remove("content"); m.remove("data"); } a };
         if let Some(req) = required {
             if req != caller {
                 self.audit.record(caller.as_str(), cmd, detail, "denied:caller");
@@ -160,6 +161,22 @@ impl Broker {
                 let (text, truncated) = fsgw::read_text(&p, max).map_err(|e| ApiError::new("io", e))?;
                 Ok(Value::obj().with("content", text).with("truncated", truncated))
             }
+            "fs.read_base64" => {
+                let (_, p) = self.grants.resolve(arg(a, "grant")?, arg(a, "path")?, false, for_ai)?;
+                let md = std::fs::metadata(&p).map_err(|e| ApiError::new("io", e.to_string()))?;
+                if !md.is_file() { return Err(ApiError::new("invalid_argument", "not a file")); }
+                if md.len() > fsgw::MAX_BINARY_BYTES { return Err(ApiError::new("too_large", "file is larger than 25 MB")); }
+                let bytes = std::fs::read(&p).map_err(|e| ApiError::new("io", e.to_string()))?;
+                Ok(Value::obj().with("data", b64::encode(&bytes)).with("size", bytes.len()))
+            }
+            "fs.write_base64" => {
+                let (g, p) = self.grants.resolve(arg(a, "grant")?, arg(a, "path")?, true, for_ai)?;
+                let bytes = b64::decode(arg(a, "data")?).map_err(|e| ApiError::new("invalid_argument", e))?;
+                if bytes.len() as u64 > fsgw::MAX_BINARY_BYTES { return Err(ApiError::new("too_large", "file is larger than 25 MB")); }
+                let overwrite = a.get("overwrite").and_then(|v| v.as_bool()).unwrap_or(false);
+                let backup = fsgw::write_bytes(&p, &bytes, &self.data_dir.join("backups"), overwrite).map_err(|e| ApiError::new("io", e))?;
+                Ok(fsgw::entry_value(&g.root, &p).with("backup", backup.map(|b| b.to_string_lossy().to_string())))
+            }
             "fs.search" => {
                 let (g, p) = self.grants.resolve(arg(a, "grant")?, a.str_field("path").unwrap_or(""), false, for_ai)?;
                 let limit = a.get("limit").and_then(|v| v.as_f64()).unwrap_or(50.0).clamp(1.0, 500.0) as usize;
@@ -168,7 +185,14 @@ impl Broker {
             "fs.write_text" => {
                 let (g, p) = self.grants.resolve(arg(a, "grant")?, arg(a, "path")?, true, for_ai)?;
                 let overwrite = a.get("overwrite").and_then(|v| v.as_bool()).unwrap_or(false);
-                let backup = fsgw::write_text(&p, arg(a, "content")?, &self.data_dir.join("backups"), overwrite).map_err(|e| ApiError::new("io", e))?;
+                // Only the user's own editor may skip the backup (autosave). AI edits are always backed up.
+                let skip_backup = caller == Caller::Ui && a.get("backup").and_then(|v| v.as_bool()) == Some(false);
+                let backups = self.data_dir.join("backups");
+                let backup = if skip_backup && overwrite && p.is_file() {
+                    std::fs::write(&p, arg(a, "content")?).map_err(|e| ApiError::new("io", e.to_string()))?; None
+                } else {
+                    fsgw::write_text(&p, arg(a, "content")?, &backups, overwrite).map_err(|e| ApiError::new("io", e))?
+                };
                 Ok(fsgw::entry_value(&g.root, &p).with("backup", backup.map(|b| b.to_string_lossy().to_string())))
             }
             "fs.mkdir" => {

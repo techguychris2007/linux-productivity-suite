@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { LuFolder, LuFile, LuChevronRight, LuFolderPlus, LuPlus, LuTrash2, LuRefreshCw, LuHardDrive, LuSparkles, LuX } from "react-icons/lu";
+import { LuFolder, LuFile, LuFileText, LuChevronRight, LuFolderPlus, LuPlus, LuTrash2, LuRefreshCw, LuHardDrive, LuSparkles, LuX, LuFileInput } from "react-icons/lu";
 import type { FsEntry } from "@atlas/shared-types";
 import { Badge, Button, EmptyState, IconButton, Spinner } from "@atlas/ui";
 import { useAtlas } from "../context";
@@ -9,7 +9,8 @@ const fmtSize = (n: number) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024)
 const fmtDate = (ms: number | null) => ms ? new Date(ms).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
 export function Drive() {
-  const { bridge, grants, notify, go, askAi } = useAtlas();
+  const { bridge, grants, notify, go, askAi, openInWriter } = useAtlas();
+  const [importing, setImporting] = useState(false);
   const [grantId, setGrantId] = useState<string | null>(null);
   const [path, setPath] = useState("");
   const [entries, setEntries] = useState<FsEntry[] | null>(null);
@@ -31,11 +32,21 @@ export function Drive() {
 
   const open = async (e: FsEntry) => {
     if (e.kind === "dir") { setPath(e.path); return; }
+    if (e.name.endsWith(".atlasdoc")) { openInWriter({ grant: grantId!, path: e.path }); return; }
     if (!TEXT_EXT.test(e.name)) { setPreview({ entry: e, content: "", truncated: false }); return; }
     try {
       const r = await bridge.core<{ content: string; truncated: boolean }>("fs.read_text", { grant: grantId, path: e.path, max_bytes: 200_000 });
       setPreview({ entry: e, ...r });
     } catch (err: any) { notify({ tone: "warning", title: `Can't preview ${e.name}`, body: err.message }); }
+  };
+
+  const importToWriter = async (e: FsEntry) => {
+    setImporting(true);
+    try {
+      const r = await bridge.engine<{ path: string }>("POST", "/writer/import", { grant: grantId, path: e.path });
+      openInWriter({ grant: grantId!, path: r.path });
+    } catch (err: any) { notify({ tone: "danger", title: "Couldn't open it in Writer", body: err.message }); }
+    finally { setImporting(false); }
   };
 
   const create = async () => {
@@ -112,7 +123,7 @@ export function Drive() {
               {entries?.length === 0 && !error && <tr><td colSpan={4} className="muted">This folder is empty.</td></tr>}
               {entries?.map((e) => (
                 <tr key={e.path} className={preview?.entry.path === e.path ? "is-selected" : ""} onDoubleClick={() => open(e)}>
-                  <td><button className="file-name" onClick={() => open(e)}>{e.kind === "dir" ? <LuFolder className="ic-folder" /> : <LuFile />}<span className="ellipsis">{e.name}</span></button></td>
+                  <td><button className="file-name" onClick={() => open(e)}>{e.kind === "dir" ? <LuFolder className="ic-folder" /> : e.name.endsWith(".atlasdoc") ? <LuFileText className="ic-doc" /> : <LuFile />}<span className="ellipsis">{e.name}</span></button></td>
                   <td className="num muted">{e.kind === "dir" ? "—" : fmtSize(e.size)}</td>
                   <td className="muted">{fmtDate(e.modified_ms)}</td>
                   <td className="actions">{grant?.access === "readwrite" && <IconButton label={`Move ${e.name} to trash`} onClick={() => trash(e)}><LuTrash2 /></IconButton>}</td>
@@ -125,7 +136,9 @@ export function Drive() {
               <header><strong className="ellipsis">{preview.entry.name}</strong><IconButton label="Close preview" onClick={() => setPreview(null)}><LuX /></IconButton></header>
               {preview.content || TEXT_EXT.test(preview.entry.name)
                 ? <pre>{preview.content || "(empty file)"}{preview.truncated ? "\n…(truncated)" : ""}</pre>
-                : <p className="muted pad">No preview for this file type yet.</p>}
+                : /\.(docx?|odt|rtf)$/i.test(preview.entry.name) && grant?.access === "readwrite"
+                  ? <div className="pad"><p className="muted">Word / OpenDocument file.</p><Button size="sm" variant="primary" icon={importing ? <Spinner size={12} /> : <LuFileInput />} disabled={importing} onClick={() => importToWriter(preview.entry)}>Open in Writer</Button></div>
+                  : <p className="muted pad">No preview for this file type yet.</p>}
               {grant?.ai_allowed && (
                 <footer><Button size="sm" icon={<LuSparkles />} onClick={() => askAi(`Summarise the file "${preview.entry.path}" in the shared folder "${grant.label}".`)}>Ask Atlas AI about this file</Button></footer>
               )}
